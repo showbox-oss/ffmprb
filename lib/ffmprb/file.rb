@@ -28,7 +28,7 @@ module Ffmprb
     def initialize(path:, mode:)
       @path = path
       @mode = mode.to_sym
-      raise Error.new("Open for read, create for write, ??? for #{@mode}")  unless %i[read write].include?(@mode)
+      raise Error.new "Open for read, create for write, ??? for #{@mode}"  unless %i[read write].include?(@mode)
       test_path!
     end
 
@@ -51,20 +51,31 @@ module Ffmprb
       "#{probe['width']}x#{probe['height']}"
     end
 
-    def snap_shot(
+
+    def snap_shot(  # NOTE can snap output (an image) or audio (a sound) or both
       at: 0.01,
-      output: File.temp('.jpg')
+      output: nil,
+      audio: nil
     )
-      raise Error.new("Incorrect extname (must be .jpg)")  unless output.extname =~ /jpe?g$/
+      audio = File.temp('.mp3')  if audio == true
+      output = File.temp('.jpg')  unless audio && !block_given?
 
-      Ffmprb::Util.ffmpeg "-i #{path} -deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{output.path}"
+      raise Error.new "Incorrect output extname (must be .jpg)"  unless output.extname =~ /jpe?g$/
+      raise Error.new "Incorrect audio extname (must be .mp3)"  unless !audio || audio.extname =~ /mp3$/
+      raise Error.new "Can only take either output OR audio unless a block is given"  unless block_given? || (!!audio ^ !!output)
 
-      return output  unless block_given?
+      cmd = " -i #{path}"
+      cmd << " -deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{output.path}"  if output
+      cmd << " -vn -ss #{at} -t 1 -f mp3 #{audio.path}"  if audio
+      Ffmprb::Util.ffmpeg cmd
+
+      return output || audio  unless block_given?
 
       begin
-        yield output
+        yield *[output, audio].compact
       ensure
-        output.remove
+        output.remove  if output
+        audio.remove  if audio
       end
     end
 
@@ -79,7 +90,7 @@ module Ffmprb
 
     def test_path!
       # XXX ensure readabilty/writability/readiness
-      raise Error.new("'#{@path}' is un#{@mode.to_s[0..3]}able")  unless @path && !@path.empty?
+      raise Error.new "'#{@path}' is un#{@mode.to_s[0..3]}able"  unless @path && !@path.empty?
     end
 
     def probe
@@ -87,10 +98,10 @@ module Ffmprb
       @probe ||=
         begin
           streams = JSON.parse(
-            ff = Util::ffprobe("-v quiet -i #{@path} -print_format json -show_format -show_streams")
+            ff = Util::ffprobe(" -v quiet -i #{@path} -print_format json -show_format -show_streams")
           )['streams']
 
-          raise Error.new("This doesn't look like a ffprobable file")  unless streams
+          raise Error.new "This doesn't look like a ffprobable file"  unless streams
           streams.first
         end
     end

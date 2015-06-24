@@ -1,9 +1,12 @@
-require 'ffmprb/version'
-require 'ffmprb/util'
 require 'ffmprb/file'
+require 'ffmprb/filter'
 require 'ffmprb/process'
+require 'ffmprb/util'
+require 'ffmprb/version'
 
 require 'logger'
+
+ENV_VAR_FALSE_REGEX = /^(0|no?|f(alse)?)?$/i
 
 module Ffmprb
 
@@ -15,15 +18,21 @@ module Ffmprb
 
   class << self
 
+    attr_accessor :debug
+
     def logger
-      @logger ||= Logger.new(STDERR)
+      @logger ||= Logger.new(STDERR).tap do |logger|
+        logger.level = debug ? Logger::DEBUG : Logger::INFO
+      end
     end
 
-    def logger=(logr)
+    def logger=(logger)
       @logger.close  if @logger
-      @logger = logr
+      @logger = logger
     end
 
   end
 
 end
+
+Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ ENV_VAR_FALSE_REGEX
