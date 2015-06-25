@@ -6,22 +6,37 @@ module Ffmprb
   class File
 
     def self.open(path)
-      new path: (path.respond_to?(:path)? path.path : path), mode: :read
+      new(path: (path.respond_to?(:path)? path.path : path), mode: :read).tap do |file|
+        Ffmprb.logger.debug "Opened file with path: #{file.path}"
+      end
     end
 
     def self.create(path)
-      new path: path, mode: :write
+      if path.respond_to?(:path)  # NOTE specially for temp files
+        @tmp = path  # NOTE to prevent ruby's garbage collection (which unlinks)
+        path.close  if path.respond_to?(:close)
+        path = path.path
+      end
+      new(path: path, mode: :write).tap do |file|
+        Ffmprb.logger.debug "Created file with path: #{file.path}"
+      end
     end
 
     def self.temp(extname)
-      file = create(Tempfile.new(['', extname]).tap{|tf| tf.close}.path)
+      file = create(Tempfile.new(['', extname]))
+      Ffmprb.logger.debug "Created temp file with path: #{file.path}"
 
       return file  unless block_given?
 
       begin
         yield file
       ensure
-        FileUtils.remove_entry file.path
+        begin
+          FileUtils.remove_entry file.path
+        rescue => e
+          Ffmprb.logger.error "Error removing temp file with path #{file.path}: #{e.message}"
+        end
+        Ffmprb.logger.debug "Removed temp file with path: #{file.path}"
       end
     end
 
@@ -58,7 +73,9 @@ module Ffmprb
       audio: nil
     )
       audio = File.temp('.mp3')  if audio == true
-      output = File.temp('.jpg')  unless audio && !block_given?
+      output ||= File.temp('.jpg')  unless audio && !block_given?
+
+      Ffmprb.logger.debug "Snap shooting files, output path: #{output ? output.path : 'NONE'}, audio path: #{audio ? audio.path : 'NONE'}"
 
       raise Error.new "Incorrect output extname (must be .jpg)"  unless output.extname =~ /jpe?g$/
       raise Error.new "Incorrect audio extname (must be .mp3)"  unless !audio || audio.extname =~ /mp3$/
@@ -74,8 +91,13 @@ module Ffmprb
       begin
         yield *[output, audio].compact
       ensure
-        output.remove  if output
-        audio.remove  if audio
+        begin
+          output.remove  if output
+          audio.remove  if audio
+          Ffmprb.logger.debug "Removed snap shot files"
+        rescue => e
+          Ffmprb.logger.error "Error removing snap shots: #{e.message}"
+        end
       end
     end
 
@@ -83,6 +105,7 @@ module Ffmprb
 
     def remove
       FileUtils.remove_entry path
+      Ffmprb.logger.debug "Removed file with path: #{path}"
       @path = nil
     end
 

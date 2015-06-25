@@ -6,7 +6,7 @@ require 'ffmprb/version'
 
 require 'logger'
 
-ENV_VAR_FALSE_REGEX = /^(0|no?|f(alse)?)?$/i
+ENV_VAR_FALSE_REGEX = /^(0|no?|false)?$/i
 
 module Ffmprb
 
@@ -17,6 +17,14 @@ module Ffmprb
   end
 
   class << self
+
+    def process(*args, &blk)
+      logger.debug "Starting process with #{args} in #{blk.source_location}"
+      Process.new(*args, &blk).tap do |process|
+        logger.debug "Finished process with #{args} in #{blk.source_location}"
+      end
+    end
+    alias :action! :process  # ;)
 
     attr_accessor :debug
 
