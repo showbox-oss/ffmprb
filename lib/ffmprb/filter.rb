@@ -4,16 +4,47 @@ module Ffmprb
 
     class << self
 
-      def atrim(st, en, input=nil, output=nil)
-        inout "atrim=#{[st, en].compact.join ':'}, asetpts=PTS-STARTPTS", input, output
+      def alphamerge(inputs, output=nil)
+        inout "alphamerge", inputs, output
+      end
+
+      def afade_in(duration=1, input=nil, output=nil)
+        inout "afade=in:d=#{duration}", input, output
+      end
+
+      def afade_out(duration=1, input=nil, output=nil)
+        inout "afade=out:d=#{duration}", input, output
       end
 
       def amix(inputs, output=nil)
         inout "amix=#{[*inputs].length}", inputs, output
       end
 
-      def black_source(duration, output=nil)
-        inout "color=black:d=#{duration}", nil, output
+      def anull(input=nil, output=nil)
+        inout "anull", input, output
+      end
+
+      def asplit(inputs=nil, outputs=nil)
+        inout "asplit", inputs, outputs
+      end
+
+      def atrim(st, en, input=nil, output=nil)
+        inout "atrim=#{[st, en].compact.join ':'}, asetpts=PTS-STARTPTS", input, output
+      end
+
+      def black_source(duration, resolution=nil, fps=nil, output=nil)
+        filter = "color=black:d=#{duration}"
+        filter << ":s=#{resolution}"  if resolution
+        filter << ":r=#{fps}"  if fps
+        inout filter, nil, output
+      end
+
+      def fade_out_alpha(duration=1, input=nil, output=nil)
+        inout "fade=out:d=#{duration}:alpha=1", input, output
+      end
+
+      def fps(fps, input=nil, output=nil)
+        inout "fps=fps=#{fps}", input, output
       end
 
       def concat_v(inputs, output=nil)
@@ -72,24 +103,69 @@ module Ffmprb
         exps
       end
 
-      def pad(w, h, input=nil, output=nil)
-        inout "pad=#{w}:#{h}:(#{w}-iw*min(#{w}/iw\\,#{h}/ih))/2:(#{h}-ih*min(#{w}/iw\\,#{h}/ih))/2", input, output
+      # XXX might be very useful with UGC: def cropdetect
+
+      def overlay(x=0, y=0, inputs=nil, output=nil)
+        inout "overlay=x=#{x}:y=#{y}:eof_action=pass", inputs, output
       end
 
-      def scale(w, h, input=nil, output=nil)
-        inout "scale=iw*min(#{w}/iw\\,#{h}/ih):ih*min(#{w}/iw\\,#{h}/ih)", input, output
+      def pad(width, height, input=nil, output=nil)
+        inout "pad=#{width}:#{height}:(#{width}-iw*min(#{width}/iw\\,#{height}/ih))/2:(#{height}-ih*min(#{width}/iw\\,#{height}/ih))/2", input, output
+      end
+
+      def scale(width, height, input=nil, output=nil)
+        inout "scale=iw*min(#{width}/iw\\,#{height}/ih):ih*min(#{width}/iw\\,#{height}/ih)", input, output
+      end
+
+      def scale_pad_fps(width, height, fps, input=nil, output=nil)
+        [
+          inout([
+            scale(width, height),
+            pad(width, height),
+            fps(fps)
+          ].join(', '), input, output)
+        ]
       end
 
       def silent_source(duration, output=nil)
         inout "aevalsrc=0:d=#{duration}", nil, output
       end
 
-      def scale_pad(w, h, input=nil, output=nil)
-        inout [scale(w, h), pad(w, h)].join(', '), input, output
+      # XXX might be very useful with transitions: def smartblur
+
+      def split(inputs=nil, outputs=nil)
+        inout "split", inputs, outputs
+      end
+
+      def transition_av(transition, resolution, fps, inputs, output=nil)
+        blend_duration = transition[:blend].to_f
+        raise "Unsupported (yet) transition, sorry."  unless
+          transition.size == 1 && blend_duration > 0
+
+        aux_lbl = "rn#{inputs.object_id}"  # should be sufficiently random
+        auxx_lbl = "x#{aux_lbl}"
+        [
+          white_source(blend_duration, resolution, fps, "#{aux_lbl}:v"),
+          inout([
+            alphamerge(["#{inputs.first}:v", "#{aux_lbl}:v"]),
+            fade_out_alpha(blend_duration)
+          ].join(', '), nil, "#{auxx_lbl}:v"),
+          overlay(0, 0, ["#{inputs.last}:v", "#{auxx_lbl}:v"], "#{output}:v"),
+          afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
+          afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
+          amix(["#{aux_lbl}:a", "#{auxx_lbl}:a"], "#{output}:a")
+        ]
       end
 
       def trim(st, en, input=nil, output=nil)
         inout "trim=#{[st, en].compact.join ':'}, setpts=PTS-STARTPTS", input, output
+      end
+
+      def white_source(duration, resolution=nil, fps=nil, output=nil)
+        filter = "color=white:d=#{duration}"
+        filter << ":s=#{resolution}"  if resolution
+        filter << ":r=#{fps}"  if fps
+        inout filter, nil, output
       end
 
       def complex_options(filters)
