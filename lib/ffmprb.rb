@@ -13,7 +13,7 @@ module Ffmprb
   QVGA = '320x240'
   HD_1080p = '1920x1080'
 
-  class Error < Exception
+  class Error < StandardError
   end
 
   class << self
