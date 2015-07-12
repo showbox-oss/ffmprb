@@ -118,13 +118,11 @@ module Ffmprb
       end
 
       def scale_pad_fps(width, height, fps, input=nil, output=nil)
-        [
-          inout([
-            scale(width, height),
-            pad(width, height),
-            fps(fps)
-          ].join(', '), input, output)
-        ]
+        inout [
+          scale(width, height),
+          pad(width, height),
+          fps(fps)
+        ].join(', '), input, output
       end
 
       def silent_source(duration, output=nil)
@@ -146,7 +144,7 @@ module Ffmprb
         auxx_lbl = "x#{aux_lbl}"
         [
           white_source(blend_duration, resolution, fps, "#{aux_lbl}:v"),
-          inout([
+          *inout([
             alphamerge(["#{inputs.first}:v", "#{aux_lbl}:v"]),
             fade_out_alpha(blend_duration)
           ].join(', '), nil, "#{auxx_lbl}:v"),
@@ -179,10 +177,12 @@ module Ffmprb
       private
 
       def inout(filter, inputs, outputs)
-        filter.tap do |f|
-          f.prepend "#{[*inputs].map{|s| "[#{s}]"}.join ' '} "  if inputs
-          f << " #{[*outputs].map{|s| "[#{s}]"}.join ' '}"  if outputs
-        end
+        [
+          filter.tap do |f|
+            f.prepend "#{[*inputs].map{|s| "[#{s}]"}.join ' '} "  if inputs
+            f << " #{[*outputs].map{|s| "[#{s}]"}.join ' '}"  if outputs
+          end
+        ]
       end
 
     end

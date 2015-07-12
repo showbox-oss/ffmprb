@@ -184,11 +184,11 @@ module Ffmprb
 
             # XXX full screen only (see exception above)
 
-            filters <<
+            filters +=
               curr_reel.reel.filters_for(lbl_aux, ns: ns)
             filters +=
               Filter.scale_pad_fps(target_width, target_height, target_fps, "#{lbl_aux}:v", "#{lbl}:v")
-            filters <<
+            filters +=
               Filter.anull("#{lbl_aux}:a", "#{lbl}:a")
           end
 
@@ -202,22 +202,25 @@ module Ffmprb
 
             lbl_pad = "bl#{prev_lbl}#{i}"
             # NOTE generously padding the previous segment to support for all the cases
-            filters <<
-              Filter.black_source(trim_prev_at + curr_reel.transition_length, target_resolution, target_fps, "#{lbl_pad}:v") <<
+            filters +=
+              Filter.black_source(trim_prev_at + curr_reel.transition_length, target_resolution, target_fps, "#{lbl_pad}:v")
+            filters +=
               Filter.silent_source(trim_prev_at + curr_reel.transition_length, "#{lbl_pad}:a")
 
             if prev_lbl
               lbl_aux = lbl_pad
               lbl_pad = "pd#{prev_lbl}#{i}"
-              filters <<
-                Filter.concat_v(["#{prev_lbl}:v", "#{lbl_aux}:v"], "#{lbl_pad}:v") <<
+              filters +=
+                Filter.concat_v(["#{prev_lbl}:v", "#{lbl_aux}:v"], "#{lbl_pad}:v")
+              filters +=
                 Filter.concat_a(["#{prev_lbl}:a", "#{lbl_aux}:a"], "#{lbl_pad}:a")
             end
 
             if curr_reel.transition
               if trim_prev_at > 0
-                filters <<
-                  Filter.split("#{lbl_pad}:v", ["#{lbl_pad}a:v", "#{lbl_pad}b:v"]) <<
+                filters +=
+                  Filter.split("#{lbl_pad}:v", ["#{lbl_pad}a:v", "#{lbl_pad}b:v"])
+                filters +=
                   Filter.asplit("#{lbl_pad}:a", ["#{lbl_pad}a:a", "#{lbl_pad}b:a"])
                 lbl_pad, lbl_pad_ = "#{lbl_pad}a", "#{lbl_pad}b"
               else
@@ -227,8 +230,9 @@ module Ffmprb
 
             if lbl_pad
               new_prev_lbl = "tm#{prev_lbl}#{i}a"
-              filters <<
-                Filter.trim(0, trim_prev_at, "#{lbl_pad}:v", "#{new_prev_lbl}:v") <<
+              filters +=
+                Filter.trim(0, trim_prev_at, "#{lbl_pad}:v", "#{new_prev_lbl}:v")
+              filters +=
                 Filter.atrim(0, trim_prev_at, "#{lbl_pad}:a", "#{new_prev_lbl}:a")
 
               segments << new_prev_lbl
@@ -240,13 +244,16 @@ module Ffmprb
               lbl_reel = "tn#{i}"
               if !lbl  # no reel
                 lbl_aux = "bk#{i}"
-                filters <<
-                  Filter.black_source(curr_reel.transition_length, target_resolution, target_fps, "#{lbl_aux}:v") <<
+                filters +=
+                  Filter.black_source(curr_reel.transition_length, target_resolution, target_fps, "#{lbl_aux}:v")
+                filters +=
                   Filter.silent_source(curr_reel.transition_length, "#{lbl_aux}:a")
               end  # NOTE else hope lbl is long enough for the transition
-              filters <<
-                Filter.trim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:v", "#{lbl_end1}:v") <<
-                Filter.atrim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:a", "#{lbl_end1}:a") <<
+              filters +=
+                Filter.trim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:v", "#{lbl_end1}:v")
+              filters +=
+                Filter.atrim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:a", "#{lbl_end1}:a")
+              filters +=
                 Filter.transition_av(curr_reel.transition, target_resolution, target_fps, [lbl_end1, lbl || lbl_aux], lbl_reel)
               lbl = lbl_reel
             end
@@ -261,7 +268,7 @@ module Ffmprb
           segments + ["#{segment}:v", "#{segment}:a"]
         end
 
-        filters <<
+        filters +=
           Filter.concat_av(segments_av)
 
         "#{Filter.complex_options filters} -s #{@resolution} #{@io.path}"
