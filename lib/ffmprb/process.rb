@@ -8,16 +8,16 @@ module Ffmprb
       run  if blk
     end
 
-    def input(io)
-      Input.new(io).tap do |inp|
+    def input(io, only: nil)
+      Input.new(io, only: only).tap do |inp|
         @inputs << inp
       end
     end
 
-    def output(io, resolution:, &blk)
+    def output(io, only: nil, resolution: Ffmprb::QVGA, &blk)
       raise Error.new "Just one output for now, sorry."  if @output
 
-      @output = Output.new(io, resolution: resolution, &blk)
+      @output = Output.new(io, only: only, resolution: resolution, &blk)
     end
 
     def run
@@ -58,21 +58,21 @@ module Ffmprb
           raise Error.new "cut from: cannot be nil"  if from.nil?
         end
 
-        def filters_for(lbl, ns:)
+        def filters_for(lbl, ns:, video: true, audio: true)
 
           # Trimming
 
           lbl_aux = "tm#{lbl}"
-          @io.filters_for(lbl_aux, ns: ns) +
+          @io.filters_for(lbl_aux, ns: ns, video: video, audio: audio) +
             if from == 0 && !to
               [
-                Filter.copy("#{lbl_aux}:v", "#{lbl}:v"),
-                Filter.anull("#{lbl_aux}:a", "#{lbl}:a")
+                *((video && channel?(:video))? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): nil),
+                *((audio && channel?(:audio))? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): nil)
               ]
             else
               [
-                Filter.trim(from, to, "#{lbl_aux}:v", "#{lbl}:v"),
-                Filter.atrim(from, to, "#{lbl_aux}:a", "#{lbl}:a")
+                *((video && channel?(:video))? Filter.trim(from, to, "#{lbl_aux}:v", "#{lbl}:v"): nil),
+                *((audio && channel?(:audio))? Filter.atrim(from, to, "#{lbl_aux}:a", "#{lbl}:a"): nil)
               ]
             end
         end
@@ -88,15 +88,15 @@ module Ffmprb
           self.crop_ratios = crop
         end
 
-        def filters_for(lbl, ns:)
+        def filters_for(lbl, ns:, video: true, audio: true)
 
           # Cropping
 
           lbl_aux = "cp#{lbl}"
-          @io.filters_for(lbl_aux, ns: ns) +
+          @io.filters_for(lbl_aux, ns: ns, video: video, audio: audio) +
             [
-              Filter.crop(crop_ratios, "#{lbl_aux}:v", "#{lbl}:v"),
-              Filter.anull("#{lbl_aux}:a", "#{lbl}:a")
+              *((video && channel?(:video))? Filter.crop(crop_ratios, "#{lbl_aux}:v", "#{lbl}:v"): nil),
+              *((audio && channel?(:audio))? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): nil)
             ]
         end
 
@@ -121,24 +121,60 @@ module Ffmprb
 
       end
 
-      def initialize(io)
+      def initialize(io, only: nil)
         @io = io
+        @channels = Array(only)
+        @channels = nil  if @channels.empty?
+        raise Error.new "Inadequate A/V channels"  if
+          @io.respond_to?(:channel?) &&
+            [:video, :audio].any?{|medium| !@io.channel?(medium) && channel?(medium, true)}
       end
 
       def options
         " -i #{@io.path}"
       end
 
-      def filters_for(lbl, ns:)
-        in_lbl = ns[self]
-        raise Error.new "Data corruption"  unless in_lbl
+      def filters_for(lbl, ns:, video: true, audio: true)
 
-        [
-          Filter.copy("#{in_lbl}:v", "#{lbl}:v"),
-          Filter.anull("#{in_lbl}:a", "#{lbl}:a")
-        ]
+        # Channelling
+
+        if @io.respond_to?(:filters_for)
+          if @io.respond_to?(:channel?)
+            lbl_aux = "au#{lbl}"
+            @io.filters_for(lbl_aux, ns: ns, video: video, audio: audio) +
+              [
+                *((video && @io.channel?(:video))?
+                  (channel?(:video)?
+                    Filter.copy("#{lbl_aux}:v", "#{lbl}:v"):
+                    Filter.nullsink("#{lbl_aux}:v")):
+                  nil),
+                *((audio && @io.channel?(:audio))?
+                  (channel?(:audio)?
+                    Filter.anull("#{lbl_aux}:a", "#{lbl}:a"):
+                    Filter.anullsink("#{lbl_aux}:a")):
+                  nil)
+              ]
+          else  # XXX unused/untested
+            @io.filters_for(lbl, ns: ns, video: video, audio: audio)
+          end
+        else
+          in_lbl = ns[self]
+          raise Error.new "Data corruption"  unless in_lbl
+          [
+            *(video && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
+            *(audio && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
+          ]
+        end
       end
 
+
+      def video
+        Input.new self, only: :video
+      end
+
+      def audio
+        Input.new self, only: :audio
+      end
 
       def crop(ratio)  # NOTE ratio is either a CROP_PARAMS symbol-ratio hash or a single (global) ratio
         Cropped.new self, crop: ratio
@@ -148,12 +184,23 @@ module Ffmprb
         Cut.new self, from: from, to: to
       end
 
+      # XXX? protected
+
+      def channel?(medium, force=false)
+        return @channels && @channels.include?(medium)  if force
+
+        (!@channels || @channels.include?(medium)) &&
+          (!@io.respond_to?(:channel?) || @io.channel?(medium))
+      end
+
     end
 
     class Output
 
-      def initialize(io, resolution:, fps: 30, &blk)
+      def initialize(io, only: nil, resolution: Ffmprb::QVGA, fps: 30, &blk)
         @io = io
+        @channels = Array(only)
+        @channels = nil  if @channels.empty?
         @resolution = resolution
         @fps = 30
 
@@ -169,8 +216,8 @@ module Ffmprb
 
         # Concatting
         segments = []
+        Ffmprb.logger.debug "Concatting segments: start"
 
-        prev_reel = nil
         @reels.each_with_index do |curr_reel, i|
 
           lbl = nil
@@ -185,11 +232,14 @@ module Ffmprb
             # XXX full screen only (see exception above)
 
             filters +=
-              curr_reel.reel.filters_for(lbl_aux, ns: ns)
+              curr_reel.reel.filters_for(lbl_aux, ns: ns,
+                video: channel?(:video), audio: channel?(:audio))
             filters +=
-              Filter.scale_pad_fps(target_width, target_height, target_fps, "#{lbl_aux}:v", "#{lbl}:v")
+              Filter.scale_pad_fps(target_width, target_height, target_fps, "#{lbl_aux}:v", "#{lbl}:v")  if
+              channel?(:video)
             filters +=
-              Filter.anull("#{lbl_aux}:a", "#{lbl}:a")
+              Filter.anull("#{lbl_aux}:a", "#{lbl}:a")  if
+              channel?(:audio)
           end
 
           trim_prev_at = curr_reel.after || (curr_reel.transition && 0)
@@ -199,29 +249,36 @@ module Ffmprb
             # NOTE make sure previous reel rolls _long_ enough AND then _just_ enough
 
             prev_lbl = segments.pop
+            Ffmprb.logger.debug "Concatting segments: #{prev_lbl} popped"
 
             lbl_pad = "bl#{prev_lbl}#{i}"
             # NOTE generously padding the previous segment to support for all the cases
             filters +=
-              Filter.black_source(trim_prev_at + curr_reel.transition_length, target_resolution, target_fps, "#{lbl_pad}:v")
+              Filter.black_source(trim_prev_at + curr_reel.transition_length, target_resolution, target_fps, "#{lbl_pad}:v")  if
+              channel?(:video)
             filters +=
-              Filter.silent_source(trim_prev_at + curr_reel.transition_length, "#{lbl_pad}:a")
+              Filter.silent_source(trim_prev_at + curr_reel.transition_length, "#{lbl_pad}:a")  if
+              channel?(:audio)
 
             if prev_lbl
               lbl_aux = lbl_pad
               lbl_pad = "pd#{prev_lbl}#{i}"
               filters +=
-                Filter.concat_v(["#{prev_lbl}:v", "#{lbl_aux}:v"], "#{lbl_pad}:v")
+                Filter.concat_v(["#{prev_lbl}:v", "#{lbl_aux}:v"], "#{lbl_pad}:v")  if
+                channel?(:video)
               filters +=
-                Filter.concat_a(["#{prev_lbl}:a", "#{lbl_aux}:a"], "#{lbl_pad}:a")
+                Filter.concat_a(["#{prev_lbl}:a", "#{lbl_aux}:a"], "#{lbl_pad}:a")  if
+                channel?(:audio)
             end
 
             if curr_reel.transition
               if trim_prev_at > 0
                 filters +=
-                  Filter.split("#{lbl_pad}:v", ["#{lbl_pad}a:v", "#{lbl_pad}b:v"])
+                  Filter.split("#{lbl_pad}:v", ["#{lbl_pad}a:v", "#{lbl_pad}b:v"])  if
+                  channel?(:video)
                 filters +=
-                  Filter.asplit("#{lbl_pad}:a", ["#{lbl_pad}a:a", "#{lbl_pad}b:a"])
+                  Filter.asplit("#{lbl_pad}:a", ["#{lbl_pad}a:a", "#{lbl_pad}b:a"])  if
+                  channel?(:audio)
                 lbl_pad, lbl_pad_ = "#{lbl_pad}a", "#{lbl_pad}b"
               else
                 lbl_pad, lbl_pad_ = nil, lbl_pad
@@ -231,11 +288,14 @@ module Ffmprb
             if lbl_pad
               new_prev_lbl = "tm#{prev_lbl}#{i}a"
               filters +=
-                Filter.trim(0, trim_prev_at, "#{lbl_pad}:v", "#{new_prev_lbl}:v")
+                Filter.trim(0, trim_prev_at, "#{lbl_pad}:v", "#{new_prev_lbl}:v")  if
+                channel?(:video)
               filters +=
-                Filter.atrim(0, trim_prev_at, "#{lbl_pad}:a", "#{new_prev_lbl}:a")
+                Filter.atrim(0, trim_prev_at, "#{lbl_pad}:a", "#{new_prev_lbl}:a")  if
+                channel?(:audio)
 
               segments << new_prev_lbl
+              Ffmprb.logger.debug "Concatting segments: #{new_prev_lbl} pushed"
             end
 
             if curr_reel.transition
@@ -245,33 +305,54 @@ module Ffmprb
               if !lbl  # no reel
                 lbl_aux = "bk#{i}"
                 filters +=
-                  Filter.black_source(curr_reel.transition_length, target_resolution, target_fps, "#{lbl_aux}:v")
+                  Filter.black_source(curr_reel.transition_length, target_resolution, target_fps, "#{lbl_aux}:v")  if
+                  channel?(:video)
                 filters +=
-                  Filter.silent_source(curr_reel.transition_length, "#{lbl_aux}:a")
+                  Filter.silent_source(curr_reel.transition_length, "#{lbl_aux}:a")  if
+                  channel?(:audio)
               end  # NOTE else hope lbl is long enough for the transition
               filters +=
-                Filter.trim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:v", "#{lbl_end1}:v")
+                Filter.trim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:v", "#{lbl_end1}:v")  if
+                channel?(:video)
               filters +=
-                Filter.atrim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:a", "#{lbl_end1}:a")
+                Filter.atrim(trim_prev_at, trim_prev_at + curr_reel.transition_length, "#{lbl_pad_}:a", "#{lbl_end1}:a")  if
+                channel?(:audio)
               filters +=
-                Filter.transition_av(curr_reel.transition, target_resolution, target_fps, [lbl_end1, lbl || lbl_aux], lbl_reel)
+                Filter.transition_av(curr_reel.transition, target_resolution, target_fps, [lbl_end1, lbl || lbl_aux], lbl_reel,
+                  video: channel?(:video), audio: channel?(:audio))
               lbl = lbl_reel
             end
 
           end
 
           segments << lbl  # NOTE can be nil
-          prev_reel = curr_reel
+          Ffmprb.logger.debug "Concatting segments: #{lbl} pushed"
         end
 
-        segments_av = segments.compact.reduce([]) do |segments, segment|
-          segments + ["#{segment}:v", "#{segment}:a"]
-        end
+        segments.compact!
+
+        lbl_out = 'oo'
 
         filters +=
-          Filter.concat_av(segments_av)
+          Filter.concat_v(segments.map{|s| "#{s}:v"}, "#{lbl_out}:v")  if
+          channel?(:video)
+        filters +=
+          Filter.concat_a(segments.map{|s| "#{s}:a"}, "#{lbl_out}:a")  if
+          channel?(:audio)
 
-        "#{Filter.complex_options filters} -s #{@resolution} #{@io.path}"
+        options = Filter.complex_options(filters)
+        options << " -map '[#{lbl_out}:v]'"  if channel?(:video)
+        options << " -map '[#{lbl_out}:a]'"  if channel?(:audio)
+        options << " #{@io.path}"
+      end
+
+      def cut(
+        after: nil,
+        transition: nil
+      )
+        raise Error.new "Nothing to cut yet..."  if @reels.empty? || @reels.last.reel.nil?
+
+        add_reel nil, after, transition, @reels.last.full_screen?
       end
 
       def roll(
@@ -282,27 +363,32 @@ module Ffmprb
       )
         raise Error.new "Nothing to roll..."  unless reel
         raise Error.new "Supporting :transition with :after only at the moment, sorry."  unless
-          !transition || after || @reels.to_a.empty?
+          !transition || after || Array(@reels).empty?
 
         add_reel reel, after, transition, (onto == :full_screen)
       end
 
-      def cut(
-        after: nil,
-        transition: nil
-      )
-        raise Error.new "Nothing to cut..."  if @reels.empty? || @reels.last.reel.nil?
+      # XXX? protected
 
-        add_reel nil, after, transition, @reels.last.full_screen?
+      def channel?(medium, force=false)
+        return @channels && @channels.include?(medium)  if force
+
+        (!@channels || @channels.include?(medium)) &&
+          reels_channel?(medium)
       end
 
       private
+
+      def reels_channel?(medium)
+        @reels.to_a.all?{|r| !r.reel || r.reel.channel?(medium)}
+      end
 
       def add_reel(reel, after, transition, full_screen)
         raise Error.new "No time to roll..."  if after && after.to_f <= 0
 
         # NOTE limited functionality (see exception in Filter.transition_av): transition = {effect => duration}
         transition_length = transition.to_h.max_by{|k,v| v}.to_a.last.to_f
+
         (@reels ||= []) <<
           OpenStruct.new(reel: reel, after: after, transition: transition, transition_length: transition_length, full_screen?: full_screen)
       end

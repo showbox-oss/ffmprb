@@ -12,11 +12,6 @@ module Ffmprb
     end
 
     def self.create(path)
-      if path.respond_to?(:path)  # NOTE specially for temp files
-        @tmp = path  # NOTE to prevent ruby's garbage collection (which unlinks)
-        path.close  if path.respond_to?(:close)
-        path = path.path
-      end
       new(path: path, mode: :write).tap do |file|
         Ffmprb.logger.debug "Created file with path: #{file.path}"
       end
@@ -42,14 +37,14 @@ module Ffmprb
 
     def initialize(path:, mode:)
       @path = path
+      @path.close  if @path && @path.respond_to?(:close)  # NOTE specially for temp files
+      path!  # NOTE early (exception) raiser
       @mode = mode.to_sym
       raise Error.new "Open for read, create for write, ??? for #{@mode}"  unless %i[read write].include?(@mode)
-      test_path!
     end
 
     def path
-      test_path!
-      @path
+      path!
     end
 
     def extname
@@ -59,44 +54,48 @@ module Ffmprb
     # Info
 
     def length
-      probe['duration'].to_f
+      @duration ||= probe['format']['duration']
+      return @duration.to_f  if @duration
+
+      @duration = probe(true)['frames'].reduce(0){|sum, frame| sum + frame['pkt_duration_time'].to_f}
     end
 
     def resolution
-      "#{probe['width']}x#{probe['height']}"
+      v_stream = probe['streams'].first
+      "#{v_stream['width']}x#{v_stream['height']}"
     end
 
 
-    def snap_shot(  # NOTE can snap output (an image) or audio (a sound) or both
+    def sample(  # NOTE can snap output (an image) or audio (a sound) or both
       at: 0.01,
-      output: nil,
+      video: true,
       audio: nil
     )
       audio = File.temp('.mp3')  if audio == true
-      output ||= File.temp('.jpg')  unless audio && !block_given?
+      video = File.temp('.jpg')  if video == true
 
-      Ffmprb.logger.debug "Snap shooting files, output path: #{output ? output.path : 'NONE'}, audio path: #{audio ? audio.path : 'NONE'}"
+      Ffmprb.logger.debug "Snap shooting files, video path: #{video ? video.path : 'NONE'}, audio path: #{audio ? audio.path : 'NONE'}"
 
-      raise Error.new "Incorrect output extname (must be .jpg)"  unless output.extname =~ /jpe?g$/
+      raise Error.new "Incorrect output extname (must be .jpg)"  unless !video || video.extname =~ /jpe?g$/
       raise Error.new "Incorrect audio extname (must be .mp3)"  unless !audio || audio.extname =~ /mp3$/
-      raise Error.new "Can only take either output OR audio unless a block is given"  unless block_given? || (!!audio ^ !!output)
+      raise Error.new "Can sample either video OR audio UNLESS a block is given"  unless block_given? || (!!audio != !!video)
 
       cmd = " -i #{path}"
-      cmd << " -deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{output.path}"  if output
+      cmd << " -deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{video.path}"  if video
       cmd << " -vn -ss #{at} -t 1 -f mp3 #{audio.path}"  if audio
       Ffmprb::Util.ffmpeg cmd
 
-      return output || audio  unless block_given?
+      return video || audio  unless block_given?
 
       begin
-        yield *[output, audio].compact
+        yield *[video || nil, audio || nil].compact
       ensure
         begin
-          output.remove  if output
+          video.remove  if video
           audio.remove  if audio
-          Ffmprb.logger.debug "Removed snap shot files"
+          Ffmprb.logger.debug "Removed sample files"
         rescue => e
-          Ffmprb.logger.error "Error removing snap shots: #{e.message}"
+          Ffmprb.logger.error "Error removing sample files: #{e.message}"
         end
       end
     end
@@ -111,22 +110,22 @@ module Ffmprb
 
     private
 
-    def test_path!
-      # XXX ensure readabilty/writability/readiness
-      raise Error.new "'#{@path}' is un#{@mode.to_s[0..3]}able"  unless @path && !@path.empty?
+    def path!
+      (  # NOTE specially for temp files
+        @path.respond_to?(:path)? @path.path : @path
+      ).tap do |path|
+        # XXX ensure readabilty/writability/readiness
+        raise Error.new "'#{path}' is un#{@mode.to_s[0..3]}able"  unless path && !path.empty?
+      end
     end
 
-    def probe
-      test_path!
-      @probe ||=
-        begin
-          streams = JSON.parse(
-            ff = Util::ffprobe(" -v quiet -i #{@path} -print_format json -show_format -show_streams")
-          )['streams']
-
-          raise Error.new "This doesn't look like a ffprobable file"  unless streams
-          streams.first
-        end
+    def probe(force=false)
+      return @probe  unless !@probe || force
+      cmd = " -v quiet -i #{path} -print_format json -show_format -show_streams"
+      cmd << " -show_frames"  if force
+      @probe = JSON.parse(Util::ffprobe cmd).tap do |probe|
+        raise Error.new "This doesn't look like a ffprobable file"  unless probe['streams']
+      end
     end
 
   end

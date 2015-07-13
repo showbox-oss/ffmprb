@@ -24,6 +24,10 @@ module Ffmprb
         inout "anull", input, output
       end
 
+      def anullsink(input=nil)
+        inout "anullsink", input, nil
+      end
+
       def asplit(inputs=nil, outputs=nil)
         inout "asplit", inputs, outputs
       end
@@ -105,6 +109,10 @@ module Ffmprb
 
       # XXX might be very useful with UGC: def cropdetect
 
+      def nullsink(input=nil)
+        inout "nullsink", input, nil
+      end
+
       def overlay(x=0, y=0, inputs=nil, output=nil)
         inout "overlay=x=#{x}:y=#{y}:eof_action=pass", inputs, output
       end
@@ -119,9 +127,9 @@ module Ffmprb
 
       def scale_pad_fps(width, height, fps, input=nil, output=nil)
         inout [
-          scale(width, height),
-          pad(width, height),
-          fps(fps)
+          *scale(width, height),
+          *pad(width, height),
+          *fps(fps)
         ].join(', '), input, output
       end
 
@@ -135,24 +143,28 @@ module Ffmprb
         inout "split", inputs, outputs
       end
 
-      def transition_av(transition, resolution, fps, inputs, output=nil)
+      def transition_av(transition, resolution, fps, inputs, output=nil, video: true, audio: true)
         blend_duration = transition[:blend].to_f
         raise "Unsupported (yet) transition, sorry."  unless
           transition.size == 1 && blend_duration > 0
 
         aux_lbl = "rn#{inputs.object_id}"  # should be sufficiently random
         auxx_lbl = "x#{aux_lbl}"
-        [
-          white_source(blend_duration, resolution, fps, "#{aux_lbl}:v"),
-          *inout([
-            alphamerge(["#{inputs.first}:v", "#{aux_lbl}:v"]),
-            fade_out_alpha(blend_duration)
-          ].join(', '), nil, "#{auxx_lbl}:v"),
-          overlay(0, 0, ["#{inputs.last}:v", "#{auxx_lbl}:v"], "#{output}:v"),
-          afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
-          afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
-          amix(["#{aux_lbl}:a", "#{auxx_lbl}:a"], "#{output}:a")
-        ]
+        [].tap do |filters|
+          filters.concat [
+            *white_source(blend_duration, resolution, fps, "#{aux_lbl}:v"),
+            *inout([
+              *alphamerge(["#{inputs.first}:v", "#{aux_lbl}:v"]),
+              *fade_out_alpha(blend_duration)
+            ].join(', '), nil, "#{auxx_lbl}:v"),
+            *overlay(0, 0, ["#{inputs.last}:v", "#{auxx_lbl}:v"], "#{output}:v"),
+          ]  if video
+          filters.concat [
+            *afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
+            *afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
+            *amix(["#{aux_lbl}:a", "#{auxx_lbl}:a"], "#{output}:a")
+          ]  if audio
+        end
       end
 
       def trim(st, en, input=nil, output=nil)
