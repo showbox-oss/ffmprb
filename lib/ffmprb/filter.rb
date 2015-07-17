@@ -83,7 +83,7 @@ module Ffmprb
         end
 
         if crop[:right] > 0 && crop[:left]
-          raise Error.new "Must specify two of {left, right, width} at most"  if crop[:width]
+          raise Error, "Must specify two of {left, right, width} at most"  if crop[:width]
           crop[:width] = 1 - crop[:right] - crop[:left]
         elsif crop[:width] > 0
           if !crop[:left] && crop[:right] > 0
@@ -94,7 +94,7 @@ module Ffmprb
         exps << "w=in_w*#{crop[:width]}"
 
         if crop[:bottom] > 0 && crop[:top]
-          raise Error.new "Must specify two of {top, bottom, height} at most"  if crop[:height]
+          raise Error, "Must specify two of {top, bottom, height} at most"  if crop[:height]
           crop[:height] = 1 - crop[:bottom] - crop[:top]
         elsif crop[:height] > 0
           if !crop[:top] && crop[:bottom] > 0

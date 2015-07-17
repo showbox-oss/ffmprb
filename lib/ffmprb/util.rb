@@ -1,39 +1,12 @@
+require 'ffmprb/util/synchro'
+require 'ffmprb/util/thread'
+require 'ffmprb/util/buffer'
+
 require 'open3'
 
 module Ffmprb
 
   module Util
-
-    class Reader < Thread
-
-      def initialize(input, store=false, log=nil)
-        @output = ''
-        @queue = Queue.new
-        super do
-          begin
-            while s = input.gets
-              Ffmprb.logger.debug log + s.chomp  if log
-              @output << s  if store
-            end
-            @queue.enq @output
-          rescue => e
-            @queue.enq e
-          end
-        end
-      end
-
-      def read
-        case res = @queue.deq
-        when Exception
-          raise res
-        when ''
-          nil
-        else
-          res
-        end
-      end
-
-    end
 
     class << self
 
@@ -58,7 +31,7 @@ module Ffmprb
             stdout_r = Reader.new(stdout, output == :stdout, log == :stdout && log_cmd)
             stderr_r = Reader.new(stderr, true, log == :stderr && log_cmd)
 
-            raise Error.new "#{cmd}:\n#{stderr_r.read}"  unless
+            raise Error, "#{cmd}:\n#{stderr_r.read}"  unless
               wait_thr.value.exitstatus == 0  # NOTE blocks
 
             # NOTE only one of them will return non-nil, see above
@@ -67,10 +40,42 @@ module Ffmprb
             begin
               stdout_r.join  if stdout_r
               stderr_r.join  if stderr_r
-            rescue => e
-              Ffmprb.logger.error "Thread joining error: #{e.message}"
+            rescue
+              Ffmprb.logger.error "Thread joining error: #{$!.message}"
             end
           end
+        end
+      end
+
+    end
+
+
+    class Reader < Thread
+
+      def initialize(input, store=false, log=nil)
+        @output = ''
+        @queue = Queue.new
+        super "reader" do
+          begin
+            while s = input.gets
+              Ffmprb.logger.debug log + s.chomp  if log
+              @output << s  if store
+            end
+            @queue.enq @output
+          rescue Exception
+            @queue.enq Error.new("Exception in a reader thread")
+          end
+        end
+      end
+
+      def read
+        case res = @queue.deq
+        when Exception
+          raise res
+        when ''
+          nil
+        else
+          res
         end
       end
 

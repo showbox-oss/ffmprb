@@ -4,8 +4,6 @@ module Ffmprb
 
     def initialize(*args, &blk)
       @inputs = []
-      instance_exec *args, &blk
-      run  if blk
     end
 
     def input(io, only: nil)
@@ -15,13 +13,13 @@ module Ffmprb
     end
 
     def output(io, only: nil, resolution: Ffmprb::QVGA, &blk)
-      raise Error.new "Just one output for now, sorry."  if @output
+      raise Error, "Just one output for now, sorry."  if @output
 
       @output = Output.new(io, only: only, resolution: resolution, &blk)
     end
 
     def run
-      Ffmprb::Util.ffmpeg command
+      Util.ffmpeg command
     end
 
     def [](obj)
@@ -55,7 +53,7 @@ module Ffmprb
           @io = unfiltered
           @from, @to = from, (to.to_f == 0 ? nil : to)
 
-          raise Error.new "cut from: cannot be nil"  if from.nil?
+          raise Error, "cut from: cannot be nil"  if from.nil?
         end
 
         def filters_for(lbl, ns:, video: true, audio: true)
@@ -114,7 +112,7 @@ module Ffmprb
               next  unless ratios
               raise "Allowed crop params are: #{CROP_PARAMS}"  unless ratios.respond_to?(:keys) && (ratios.keys - CROP_PARAMS).empty?
               ratios.each do |key, value|
-                raise Error.new "Crop #{key} must be between 0 and 1 (not '#{value}')"  unless (0...1).include? value
+                raise Error, "Crop #{key} must be between 0 and 1 (not '#{value}')"  unless (0...1).include? value
               end
             end
         end
@@ -123,9 +121,9 @@ module Ffmprb
 
       def initialize(io, only: nil)
         @io = io
-        @channels = Array(only)
+        @channels = [*only]
         @channels = nil  if @channels.empty?
-        raise Error.new "Inadequate A/V channels"  if
+        raise Error, "Inadequate A/V channels"  if
           @io.respond_to?(:channel?) &&
             [:video, :audio].any?{|medium| !@io.channel?(medium) && channel?(medium, true)}
       end
@@ -159,7 +157,7 @@ module Ffmprb
           end
         else
           in_lbl = ns[self]
-          raise Error.new "Data corruption"  unless in_lbl
+          raise Error, "Data corruption"  unless in_lbl
           [
             *(video && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
             *(audio && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
@@ -199,7 +197,7 @@ module Ffmprb
 
       def initialize(io, only: nil, resolution: Ffmprb::QVGA, fps: 30, &blk)
         @io = io
-        @channels = Array(only)
+        @channels = [*only]
         @channels = nil  if @channels.empty?
         @resolution = resolution
         @fps = 30
@@ -209,8 +207,8 @@ module Ffmprb
 
       def options(ns)
         # XXX TODO manage stream labels through ns
-        raise Error.new "Nothing to roll..."  if @reels.select(&:reel).empty?
-        raise Error.new "Supporting just full_screen for now, sorry."  unless @reels.all?(&:full_screen?)
+        raise Error, "Nothing to roll..."  if @reels.select(&:reel).empty?
+        raise Error, "Supporting just full_screen for now, sorry."  unless @reels.all?(&:full_screen?)
 
         filters = []
 
@@ -350,7 +348,7 @@ module Ffmprb
         after: nil,
         transition: nil
       )
-        raise Error.new "Nothing to cut yet..."  if @reels.empty? || @reels.last.reel.nil?
+        raise Error, "Nothing to cut yet..."  if @reels.empty? || @reels.last.reel.nil?
 
         add_reel nil, after, transition, @reels.last.full_screen?
       end
@@ -361,9 +359,9 @@ module Ffmprb
         after: nil,
         transition: nil
       )
-        raise Error.new "Nothing to roll..."  unless reel
-        raise Error.new "Supporting :transition with :after only at the moment, sorry."  unless
-          !transition || after || Array(@reels).empty?
+        raise Error, "Nothing to roll..."  unless reel
+        raise Error, "Supporting :transition with :after only at the moment, sorry."  unless
+          !transition || after || @reels.to_a.empty?
 
         add_reel reel, after, transition, (onto == :full_screen)
       end
@@ -384,7 +382,7 @@ module Ffmprb
       end
 
       def add_reel(reel, after, transition, full_screen)
-        raise Error.new "No time to roll..."  if after && after.to_f <= 0
+        raise Error, "No time to roll..."  if after && after.to_f <= 0
 
         # NOTE limited functionality (see exception in Filter.transition_av): transition = {effect => duration}
         transition_length = transition.to_h.max_by{|k,v| v}.to_a.last.to_f
@@ -395,12 +393,12 @@ module Ffmprb
 
       def target_width
         @target_width ||= @resolution.to_s.split('x')[0].to_i.tap do |width|
-          raise Error.new "Width (#{width}) must be divisible by 2, sorry"  unless width % 2 == 0
+          raise Error, "Width (#{width}) must be divisible by 2, sorry"  unless width % 2 == 0
         end
       end
       def target_height
         @target_height ||= @resolution.to_s.split('x')[1].to_i.tap do |height|
-          raise Error.new "Height (#{height}) must be divisible by 2, sorry"  unless height % 2 == 0
+          raise Error, "Height (#{height}) must be divisible by 2, sorry"  unless height % 2 == 0
         end
       end
       def target_resolution
