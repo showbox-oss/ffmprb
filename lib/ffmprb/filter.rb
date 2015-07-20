@@ -16,8 +16,9 @@ module Ffmprb
         inout "afade=out:d=#{duration}", input, output
       end
 
+      # NOTE inputs order matters
       def amix(inputs, output=nil)
-        inout "amix=#{[*inputs].length}", inputs, output
+        inout "amix=#{[*inputs].length}:duration=first", inputs, output
       end
 
       def anull(input=nil, output=nil)
@@ -133,6 +134,10 @@ module Ffmprb
         ].join(', '), input, output
       end
 
+      def silencedetect(input=nil, output=nil)
+        inout "silencedetect=d=2:n=-30dB", input, output
+      end
+
       def silent_source(duration, output=nil)
         inout "aevalsrc=0:d=#{duration}", nil, output
       end
@@ -162,13 +167,38 @@ module Ffmprb
           filters.concat [
             *afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
             *afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
-            *amix(["#{aux_lbl}:a", "#{auxx_lbl}:a"], "#{output}:a")
+            *amix(["#{auxx_lbl}:a", "#{aux_lbl}:a"], "#{output}:a")
           ]  if audio
         end
       end
 
       def trim(st, en, input=nil, output=nil)
         inout "trim=#{[st, en].compact.join ':'}, setpts=PTS-STARTPTS", input, output
+      end
+
+      def volume(volume, input=nil, output=nil)
+        inout "volume='#{volume_exp volume}':eval=frame", input, output
+      end
+
+      def volume_exp(volume)  # NOTE volume is an ordered Hash
+        return volume  unless volume.respond_to?(:each)
+        raise Error, "volume cannot be empty"  if volume.empty?
+
+        prev_at = 0.0
+        prev_vol = volume[prev_at] || 1.0
+        exp = "#{volume[volume.keys.last]}"
+        volume.each do |at, vol|
+          vol_exp =
+            if (vol - prev_vol).abs < 0.001
+              vol
+            else
+              "(#{vol - prev_vol}*t + #{prev_vol*at - vol*prev_at})/#{at - prev_at}"
+            end
+          exp = "if(between(t, #{prev_at}, #{at}), #{vol_exp}, #{exp})"
+          prev_at = at
+          prev_vol = vol
+        end
+        exp
       end
 
       def white_source(duration, resolution=nil, fps=nil, output=nil)
@@ -182,7 +212,7 @@ module Ffmprb
         if filters.empty?
           ''
         else
-          " -filter_complex '#{filters.join '; '}'"
+          " -filter_complex \"#{filters.join '; '}\""
         end
       end
 

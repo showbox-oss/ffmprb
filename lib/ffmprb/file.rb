@@ -8,12 +8,32 @@ module Ffmprb
 
     class << self
 
-      def buffered_fifos(extname='.tmp', &blk)
-        output_fifo_file = create(tmp_fifo_path extname)
-        ::File.mkfifo output_fifo_file.path
-        input_fifo_file = output_fifo_file.buffered_fifo_to(&blk)
+      def buffered_fifo(extname='.tmp')
+        input_fifo_file = temp_fifo(extname)
+        output_fifo_file = temp_fifo(extname)
 
-        [input_fifo_file, output_fifo_file]
+        Ffmprb.logger.debug "Opening #{input_fifo_file.path}>#{output_fifo_file.path} for buffering"
+        buff = Util::IoBuffer.new(
+          ->{
+            Ffmprb.logger.debug "Trying to open #{input_fifo_file.path} for reading+buffering"
+            ::File.open(input_fifo_file.path, 'r')
+          },
+          ->{
+            Ffmprb.logger.debug "Trying to open #{output_fifo_file.path} for buffering+writing"
+            ::File.open(output_fifo_file.path, 'w')
+            }
+          )
+        thr = Util::Thread.new do
+          buff.flush!
+          Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} ended"
+          input_fifo_file.remove
+          output_fifo_file.remove
+        end
+        Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} started"
+
+        yield buff  if block_given?  # XXX a hidden option
+
+        OpenStruct.new in: input_fifo_file, out: output_fifo_file, thr: thr
       end
 
       def create(path)
@@ -39,14 +59,27 @@ module Ffmprb
         ensure
           begin
             FileUtils.remove_entry file.path
-          rescue => e
-            Ffmprb.logger.error "Error removing temp file with path #{file.path}: #{e.message}"
+          rescue
+            Ffmprb.logger.warn "Error removing temp file with path #{file.path}: #{$!.message}"
           end
           Ffmprb.logger.debug "Removed temp file with path: #{file.path}"
         end
       end
 
-      def tmp_fifo_path(extname)
+      def temp_fifo(extname='.tmp', &blk)
+        fifo_file = create(temp_fifo_path extname)
+        ::File.mkfifo fifo_file.path
+
+        return fifo_file  unless block_given?
+
+        begin
+          yield
+        ensure
+          fifo_file.remove
+        end
+      end
+
+      def temp_fifo_path(extname)
         ::File.join Dir.tmpdir, Dir::Tmpname.make_tmpname('', 'p' + extname)
       end
 
@@ -124,26 +157,6 @@ module Ffmprb
       FileUtils.remove_entry path
       Ffmprb.logger.debug "Removed file with path: #{path}"
       @path = nil
-    end
-
-    # Utility
-
-    def buffered_fifo_to(&blk)
-      File.create(self.class.tmp_fifo_path extname).tap do |fifo_file|
-        ::File.mkfifo fifo_file.path
-
-        Thread.new "buffer (#{fifo_file.path}->#{path})" do  # NOTE because fifo won't open one-sided, blocks until open both for read and write
-          buff = Util::Buffer.new(::File.open(fifo_file.path, 'r'), ::File.open(path, 'w'))
-          buff.once :terminated do
-            Ffmprb.logger.debug "Buffering from #{fifo_file.path} to #{path} ended"
-            buff.input.close
-            buff.output.close
-          end
-          Ffmprb.logger.debug "Buffering from #{fifo_file.path} to #{path} started"
-
-          yield buff  if block_given?
-        end
-      end
     end
 
     private

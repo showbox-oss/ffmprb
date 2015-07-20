@@ -30,6 +30,7 @@ Gem::Specification.new do |spec|
 
   spec.add_development_dependency 'bundler', '>= 1.9.9'
   spec.add_development_dependency 'byebug', '>= 4.0.5'
+  spec.add_development_dependency 'guard-rspec', '>= 2.12.8'
   spec.add_development_dependency 'rake', '>= 10.4.2'
   spec.add_development_dependency 'rmagick', '>= 2.15'
   spec.add_development_dependency 'rspec', '>= 3.2.0'

@@ -1,6 +1,6 @@
-require 'ffmprb/util/synchro'
+# require 'ffmprb/util/synchro'
 require 'ffmprb/util/thread'
-require 'ffmprb/util/buffer'
+require 'ffmprb/util/io_buffer'
 
 require 'open3'
 
@@ -15,8 +15,8 @@ module Ffmprb
       end
 
       def ffmpeg(args)
-        args = " -loglevel debug #{args}"  if Ffmprb.debug
-        sh "ffmpeg -y#{args}"
+        args = " -loglevel debug#{args}"  if Ffmprb.debug
+        sh "ffmpeg -y#{args}", output: :stderr
       end
 
       def sh(cmd, output: :stdout, log: :stderr)
@@ -39,10 +39,13 @@ module Ffmprb
           ensure
             begin
               stdout_r.join  if stdout_r
+              stdout_r = nil
               stderr_r.join  if stderr_r
             rescue
               Ffmprb.logger.error "Thread joining error: #{$!.message}"
+              stderr_r.join  if stdout_r
             end
+            Ffmprb.logger.debug "FINISHED: #{cmd}"
           end
         end
       end
