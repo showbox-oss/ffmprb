@@ -6,27 +6,19 @@ require 'ffmprb/version'
 Gem::Specification.new do |spec|
   spec.name          = 'ffmprb'
   spec.version       = Ffmprb::VERSION
-  spec.authors       = ["Costa Shapiro - showbox"]
+  spec.authors       = ["showbox.com", "Costa Shapiro @ Showbox"]
   spec.email         = ['costa@showbox.com']
 
-  spec.summary       = %q{TODO: Write a short summary, because Rubygems requires one.}
-  spec.description   = %q{TODO: Write a longer description or delete this line.}
-  spec.homepage      = "TODO: Put your gem's website or public repo URL here."
-
-  # Prevent pushing this gem to RubyGems.org by setting 'allowed_push_host', or
-  # delete this section to allow pushing this gem to any host.
-  if spec.respond_to?(:metadata)
-    spec.metadata['allowed_push_host'] = "TODO: Set to 'http://mygemserver.com'"
-  else
-    raise "RubyGems 2.0 or newer is required to protect against public gem pushes."
-  end
+  spec.summary       = "ffmprb is your audio/video montage friend, based on https://ffmpeg.org"
+  spec.description   = "A DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends"
+  spec.homepage      = 'https://github.com/showbox-oss/ffmprb'
 
   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }
   spec.bindir        = 'exe'
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'mkfifo'  # XXX I'm not happy with this dependency, but there's nothing crossplatform (= for windoze too) at the moment
+  spec.add_dependency 'mkfifo'  # XXX I'm not happy with this dependency, and there's nothing crossplatform (= for windoze too) at the moment
 
   spec.add_development_dependency 'bundler', '>= 1.9.9'
   spec.add_development_dependency 'byebug', '>= 4.0.5'
