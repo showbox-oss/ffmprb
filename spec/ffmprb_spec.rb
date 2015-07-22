@@ -445,8 +445,13 @@ describe Ffmprb do
 
     context :audio_overlay do
 
-      it "should overlay sound with volume" do
+      around do |example|
+        Timeout::timeout(3) do
+          example.run
+        end
+      end
 
+      it "should overlay sound with volume" do
         # NOTE non-streaming output file requires additional development see #181845
         Ffmprb.process(av_file_wtb, a_file, stream_av_out_file) do |input1, input2, output1|
 
@@ -528,13 +533,13 @@ describe Ffmprb do
 
               in1 = input(input1, only: :audio)
               output(output1) do
-                roll in1, transition: {blend: 1}
-                overlay in1.cut(from: 4), duck: :audio
+                roll in1.cut(from: 4, to: 12), transition: {blend: 1}
+                overlay in1, duck: :audio
               end
 
             end
 
-            expect(a_out_file.length).to be_approximately(16)
+            expect(a_out_file.length).to be_approximately(8)
 
             expect(wave_data(a_out_file.sample(at: 2, video: false, audio: true)).frequency).to be_within(10).of 666
             expect(wave_data(a_out_file.sample(at: 6, video: false, audio: true)).frequency).to be_within(10).of 666

@@ -1,4 +1,5 @@
 # ffmprb
+[![Gem Version](https://badge.fury.io/rb/ffmprb.svg)](http://badge.fury.io/rb/ffmprb)
 ## your audio/video montage friend, based on [ffmpeg](https://ffmpeg.org)
 
 A DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends.

@@ -4,6 +4,8 @@ module Ffmprb
 
     class << self
 
+      attr_accessor :silence_noise_max_db
+
       def alphamerge(inputs, output=nil)
         inout "alphamerge", inputs, output
       end
@@ -135,7 +137,7 @@ module Ffmprb
       end
 
       def silencedetect(input=nil, output=nil)
-        inout "silencedetect=d=2:n=-30dB", input, output
+        inout "silencedetect=d=1:n=#{silence_noise_max_db}dB", input, output
       end
 
       def silent_source(duration, output=nil)

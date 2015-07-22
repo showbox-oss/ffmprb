@@ -19,6 +19,12 @@ module Ffmprb
   class Error < StandardError
   end
 
+  Process.duck_audio_hi = 0.9
+  Process.duck_audio_lo = 0.1
+  Process.duck_audio_transition_sec = 1
+  Process.duck_audio_silent_min_sec = 3
+  Filter.silence_noise_max_db = -40
+
   Util::IoBuffer.blocks_max = 1024
   Util::IoBuffer.block_size = 64*1024
   Util::IoBuffer.timeout = 9

@@ -26,7 +26,7 @@ describe Ffmprb::File do
       end
     end
 
-    it "should has the destination readable (while writing to)" do
+    it "should have the destination readable (while writing to)" do
 
       # piggy-backing another test
       expect(@fifo.in.extname).to eq '.ext'
