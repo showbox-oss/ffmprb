@@ -238,9 +238,9 @@ module Ffmprb
           end
           io_channel_lbls.each do |io, channel_lbls|
             channel_lbls.each do |channel_lbl|
-              options << " -map \"[#{channel_lbl}]\""
+              options << '-map' << "[#{channel_lbl}]"
             end
-            options << " #{io.path}"
+            options << io.path
           end
 
         end

@@ -19,6 +19,9 @@ module Ffmprb
   class Error < StandardError
   end
 
+  Util.ffmpeg_cmd = 'ffmpeg'
+  Util.ffprobe_cmd = 'ffprobe'
+
   Process.duck_audio_hi = 0.9
   Process.duck_audio_lo = 0.1
   Process.duck_audio_transition_sec = 1
@@ -59,9 +62,9 @@ module Ffmprb
     def find_silence(input_file, output_file)
       logger.debug "Finding silence (#{input_file.path}->#{output_file.path})"
       filters = Filter.silencedetect
-      options = " -i #{input_file.path}#{Filter.complex_options filters} #{output_file.path}"
+      options = ['-i', input_file.path, *Filter.complex_options(filters), output_file.path]
       silence = []
-      Util.ffmpeg(options).split("\n").each do |line|
+      Util.ffmpeg(*options).split("\n").each do |line|
         next  unless line =~ /^\[silencedetect\s.*\]\s*silence_(\w+):\s*(\d+\.?d*)/
         case $1
         when 'start'
