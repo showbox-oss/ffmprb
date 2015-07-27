@@ -19,8 +19,8 @@ module Ffmprb
   class Error < StandardError
   end
 
-  Util.ffmpeg_cmd = 'ffmpeg'
-  Util.ffprobe_cmd = 'ffprobe'
+  Util.ffmpeg_cmd = ['ffmpeg']
+  Util.ffprobe_cmd = ['ffprobe']
 
   Process.duck_audio_hi = 0.9
   Process.duck_audio_lo = 0.1

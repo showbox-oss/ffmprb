@@ -13,12 +13,12 @@ module Ffmprb
       attr_accessor :ffmpeg_cmd, :ffprobe_cmd
 
       def ffprobe(*args)
-        sh ffprobe_cmd, *args
+        sh *ffprobe_cmd, *args
       end
 
       def ffmpeg(*args)
         args = ['-loglevel', 'debug'] + args  if Ffmprb.debug
-        sh ffmpeg_cmd, '-y', *args, output: :stderr
+        sh *ffmpeg_cmd, '-y', *args, output: :stderr
       end
 
       def sh(*cmd, output: :stdout, log: :stderr)
