@@ -210,12 +210,8 @@ module Ffmprb
         inout filter, nil, output
       end
 
-      def complex_options(filters)
-        if filters.empty?
-          ''
-        else
-          " -filter_complex \"#{filters.join '; '}\""
-        end
+      def complex_options(*filters)
+        ['-filter_complex', filters.join('; ')]  unless filters.empty?
       end
 
       private

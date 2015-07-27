@@ -131,10 +131,10 @@ module Ffmprb
       raise Error, "Incorrect audio extname (must be .mp3)"  unless !audio || audio.extname =~ /mp3$/
       raise Error, "Can sample either video OR audio UNLESS a block is given"  unless block_given? || (!!audio != !!video)
 
-      cmd = " -i #{path}"
-      cmd << " -deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{video.path}"  if video
-      cmd << " -vn -ss #{at} -t 1 -f mp3 #{audio.path}"  if audio
-      Util.ffmpeg cmd
+      cmd = ['-i', path]
+      cmd += ['-deinterlace', '-an', '-ss', at, '-r', 1, '-vcodec', 'mjpeg', '-f', 'mjpeg', video.path]  if video
+      cmd += ['-vn', '-ss', at, '-t', 1, '-f', 'mp3', audio.path]  if audio
+      Util.ffmpeg *cmd
 
       return video || audio  unless block_given?
 
@@ -172,9 +172,9 @@ module Ffmprb
 
     def probe(force=false)
       return @probe  unless !@probe || force
-      cmd = " -v quiet -i #{path} -print_format json -show_format -show_streams"
-      cmd << " -show_frames"  if force
-      @probe = JSON.parse(Util::ffprobe cmd).tap do |probe|
+      cmd = ['-v', 'quiet', '-i', path, '-print_format', 'json', '-show_format', '-show_streams']
+      cmd << '-show_frames'  if force
+      @probe = JSON.parse(Util::ffprobe *cmd).tap do |probe|
         raise Error, "This doesn't look like a ffprobable file"  unless probe['streams']
       end
     end

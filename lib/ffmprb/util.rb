@@ -10,28 +10,32 @@ module Ffmprb
 
     class << self
 
-      def ffprobe(args)
-        sh "ffprobe#{args}"
+      attr_accessor :ffmpeg_cmd, :ffprobe_cmd
+
+      def ffprobe(*args)
+        sh *ffprobe_cmd, *args
       end
 
-      def ffmpeg(args)
-        args = " -loglevel debug#{args}"  if Ffmprb.debug
-        sh "ffmpeg -y#{args}", output: :stderr
+      def ffmpeg(*args)
+        args = ['-loglevel', 'debug'] + args  if Ffmprb.debug
+        sh *ffmpeg_cmd, '-y', *args, output: :stderr
       end
 
-      def sh(cmd, output: :stdout, log: :stderr)
-        Ffmprb.logger.info cmd
-        Open3.popen3(cmd) do |stdin, stdout, stderr, wait_thr|
+      def sh(*cmd, output: :stdout, log: :stderr)
+        cmd = cmd.to_a.map(&:to_s)
+        cmd_str = cmd.join(' ')
+        Ffmprb.logger.info cmd_str
+        Open3.popen3(*cmd) do |stdin, stdout, stderr, wait_thr|
           stdin.close
 
           # XXX process timeouting/cleanup here will be appreciated
 
           begin
-            log_cmd = "#{cmd.split(' ').first.upcase}: "  if log
+            log_cmd = "#{(cmd.respond_to?(:first)? cmd : cmd.split(' ')).first.upcase}: "  if log
             stdout_r = Reader.new(stdout, output == :stdout, log == :stdout && log_cmd)
             stderr_r = Reader.new(stderr, true, log == :stderr && log_cmd)
 
-            raise Error, "#{cmd}:\n#{stderr_r.read}"  unless
+            raise Error, "#{cmd_str}:\n#{stderr_r.read}"  unless
               wait_thr.value.exitstatus == 0  # NOTE blocks
 
             # NOTE only one of them will return non-nil, see above
@@ -45,7 +49,7 @@ module Ffmprb
               Ffmprb.logger.error "Thread joining error: #{$!.message}"
               stderr_r.join  if stdout_r
             end
-            Ffmprb.logger.debug "FINISHED: #{cmd}"
+            Ffmprb.logger.debug "FINISHED: #{cmd_str}"
           end
         end
       end

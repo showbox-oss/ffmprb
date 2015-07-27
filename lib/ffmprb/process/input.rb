@@ -114,7 +114,7 @@ module Ffmprb
       end
 
       def options
-        " -i #{@io.path}"
+        ['-i', @io.path]
       end
 
       def filters_for(lbl, process:, video: true, audio: true)

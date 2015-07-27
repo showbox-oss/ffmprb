@@ -70,7 +70,7 @@ module Ffmprb
     end
 
     def run
-      Util.ffmpeg command
+      Util.ffmpeg *command
       @threaded.to_a.each &:join
     end
 
@@ -93,7 +93,7 @@ module Ffmprb
     end
 
     def input_options
-      @inputs.map(&:options).join
+      @inputs.map(&:options).flatten(1)
     end
 
     def output_options
