@@ -1,0 +1,11 @@
+#!/usr/bin/env ruby
+
+begin
+  require 'rubygems'
+  gem 'ffmprb'
+rescue LoadError
+end
+
+require 'ffmprb'
+
+Ffmprb.execute

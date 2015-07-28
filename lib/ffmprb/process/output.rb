@@ -5,13 +5,15 @@ module Ffmprb
     class Output
 
       def initialize(io, only: nil, resolution: Ffmprb::QVGA, fps: 30)
-        @io = io
+        @io = resolve(io)
         @channels = [*only]
         @channels = nil  if @channels.empty?
         @resolution = resolution
         @fps = 30
       end
 
+      # XXX This method is exceptionally long at the moment. This is not too grand.
+      # However, structuring the code should be undertaken with care, as not to harm the composition clarity.
       def options(process)
         # XXX TODO manage stream labels through process
         raise Error, "Nothing to roll..."  if @reels.select(&:reel).empty?
@@ -21,7 +23,6 @@ module Ffmprb
 
         # Concatting
         segments = []
-        Ffmprb.logger.debug "Concatting segments: start"
 
         @reels.each_with_index do |curr_reel, i|
 
@@ -55,7 +56,6 @@ module Ffmprb
             # NOTE make sure previous reel rolls _long_ enough AND then _just_ enough
 
             prev_lbl = segments.pop
-            Ffmprb.logger.debug "Concatting segments: #{prev_lbl} popped"
 
             lbl_pad = "bl#{prev_lbl}#{i}"
             # NOTE generously padding the previous segment to support for all the cases
@@ -141,7 +141,6 @@ module Ffmprb
           end
 
           segments << lbl  # NOTE can be nil
-          Ffmprb.logger.debug "Concatting segments: #{lbl} pushed"
         end
 
         segments.compact!
@@ -174,7 +173,7 @@ module Ffmprb
             filters +=
               Filter.copy("#{lbl_out}:v", "#{lbl_nxt}:v")  if channel?(:video)
             filters +=
-              Filter.amix(["#{lbl_out}:a", "#{lbl_over}:a"], "#{lbl_nxt}:a")  if channel?(:audio)
+              Filter.amix_to_first(["#{lbl_out}:a", "#{lbl_over}:a"], "#{lbl_nxt}:a")  if channel?(:audio)
 
             lbl_out = lbl_nxt
           end
@@ -281,13 +280,26 @@ module Ffmprb
         add_reel reel, after, transition, (onto == :full_screen)
       end
 
-      # XXX? protected
-
       def channel?(medium, force=false)
-        return @channels && @channels.include?(medium)  if force
+        return !!@channels && @channels.include?(medium) && @io.channel?(medium)  if force
 
-        (!@channels || @channels.include?(medium)) &&
+        (!@channels || @channels.include?(medium)) && @io.channel?(medium) &&
           reels_channel?(medium)
+      end
+
+      protected
+
+      def resolve(io)
+        return io  unless io.is_a? String
+
+        case io
+        when /^\/\w/
+          File.create(io).tap do |file|
+            Ffmprb.logger.warn "Output file exists (#{file.path}), will overwrite"  if file.exist?
+          end
+        else
+          raise Error, "Cannot resolve output: #{io}"
+        end
       end
 
       private

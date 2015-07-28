@@ -105,12 +105,11 @@ module Ffmprb
 
 
       def initialize(io, only: nil)
-        @io = io
+        @io = resolve(io)
         @channels = [*only]
         @channels = nil  if @channels.empty?
         raise Error, "Inadequate A/V channels"  if
-          @io.respond_to?(:channel?) &&
-            [:video, :audio].any?{|medium| !@io.channel?(medium) && channel?(medium, true)}
+          [:video, :audio].any?{|medium| !@io.channel?(medium) && channel?(medium, true)}
       end
 
       def options
@@ -121,7 +120,7 @@ module Ffmprb
 
         # Channelling
 
-        if @io.respond_to?(:filters_for)  # NOTE assuming @io.respond_to?(:channel?)
+        if @io.respond_to?(:filters_for)
           lbl_aux = "au#{lbl}"
           @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
             [
@@ -136,8 +135,8 @@ module Ffmprb
           in_lbl = process[self]
           raise Error, "Data corruption"  unless in_lbl
           [
-            *(video && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
-            *(audio && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
+            *(video && @io.channel?(:video) && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
+            *(audio && @io.channel?(:audio) && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
           ]
         end
       end
@@ -162,13 +161,23 @@ module Ffmprb
         Loud.new self, volume: vol
       end
 
-      # XXX? protected
-
       def channel?(medium, force=false)
-        return @channels && @channels.include?(medium)  if force
+        return !!@channels && @channels.include?(medium) && @io.channel?(medium)  if force
 
-        (!@channels || @channels.include?(medium)) &&
-          (!@io.respond_to?(:channel?) || @io.channel?(medium))
+        (!@channels || @channels.include?(medium)) && @io.channel?(medium)
+      end
+
+      protected
+
+      def resolve(io)
+        return io  unless io.is_a? String
+
+        case io
+        when /^\/\w/
+          File.open io
+        else
+          raise Error, "Cannot resolve input: #{io}"
+        end
       end
 
     end

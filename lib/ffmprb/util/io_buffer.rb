@@ -70,6 +70,8 @@ module Ffmprb
             while s = @q.deq
               next  if broken
               written = 0
+              tries = 1
+              logged_tries = 1/2
               while !broken
                 raise @terminate  if @terminate.kind_of?(Exception)
                 begin
@@ -77,15 +79,17 @@ module Ffmprb
                   written = output.write_nonblock(s)  if output  # NOTE will only be nil if @terminate is an exception
                   break  if written == s.length  # NOTE kinda optimisation
                   s = s[written..-1]
-                rescue Errno::EAGAIN
-                  Ffmprb.logger.debug "IoBuffer writer (to #{output.path}) retrying"
-                  sleep 0.01
-                rescue Errno::EWOULDBLOCK
-                  Ffmprb.logger.debug "IoBuffer writer (to #{output.path}) taking a break"
+                rescue Errno::EAGAIN, Errno::EWOULDBLOCK
+                  if tries == 2 * logged_tries
+                    Ffmprb.logger.debug "IoBuffer writer (to #{output.path}) retrying... (#{tries} writes): #{$!.class}"
+                    logged_tries = tries
+                  end
                   sleep 0.01
                 rescue Errno::EPIPE
                   broken = true
                   Ffmprb.logger.debug "IoBuffer writer (to #{output.path}) broken"
+                ensure
+                  tries += 1
                 end
               end
             end
@@ -187,14 +191,21 @@ module Ffmprb
 
         @output_thr = Util::Thread.new("buffer writer output helper") do
           Ffmprb.logger.debug "Opening buffer output"
+          tries = 1
+          logged_tries = 1/2
           begin
             Timeout::timeout(self.class.timeout/2) do
               @output = @output.call
               Ffmprb.logger.debug "Opened buffer output: #{@output.path}"
             end
           rescue Timeout::Error
-            Ffmprb.logger.info "A little bit of timeout in the buffer writer helper thread"
+            if tries == 2 * logged_tries
+              Ffmprb.logger.info "A little bit of timeout in the buffer writer helper thread (##{tries})"
+              logged_tries = tries
+            end
             retry  unless @terminate.kind_of?(Exception)
+          ensure
+            tries += 1
           end
         end
       end

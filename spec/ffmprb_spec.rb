@@ -3,9 +3,6 @@ require 'ostruct'
 require 'rmagick'
 require 'sox'
 
-def be_approximately(sec)
-  be_within(0.06 * sec).of sec
-end
 
 describe Ffmprb do
 
@@ -18,48 +15,6 @@ describe Ffmprb do
     A6: 1760.00,
     B6: 1975.53
   )
-
-  # XXX https://github.com/rspec/rspec-core/issues/1031#issuecomment-120706058
-  # around :all do |group|
-  #   Ffmprb::File.temp('.mp4') do |av_file_gor|
-  #     system("ffmpeg -y -filter_complex 'color=c=red:r=60:d=6:s=320x240 [red]; color=c=green:r=60:d=6:s=280x200 [green]; [red] [green] overlay=20:20; sine=1000:d=6' -s 320x240 #{av_file_gor.path}")
-  #     @av_file_gor = av_file_gor
-  #     Ffmprb::File.temp('.y4m') do |v_file|
-  #       system("ffmpeg -y -filter_complex 'color=c=red:r=30:d=6:s=320x240 [red]; color=c=green:r=30:d=6:s=280x200 [green]; [red] [green] overlay=20:20' -pix_fmt yuv420p #{v_file.path}")
-  #       @v_file = v_file
-  #       Ffmprb::File.temp('.y4m') do |v_file|
-  #         system("ffmpeg -y -filter_complex 'color=c=red:r=30:d=6:s=320x240 [red]; color=c=green:r=30:d=6:s=280x200 [green]; [red] [green] overlay=20:20' -pix_fmt yuv420p #{v_file.path}")
-  #         @v_file = v_file
-  #
-  #         group.run_examples
-  #       end
-  #     end
-  #   end
-  # end
-
-  before :all do
-    @av_file_gor = Ffmprb::File.temp('.mp4')
-    Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options('color=c=red:r=60:d=6:s=320x240 [red]', 'color=c=green:r=60:d=6:s=280x200 [green]', '[red] [green] overlay=20:20', 'sine=1000:d=6'), @av_file_gor.path
-    @av_file_wtb = Ffmprb::File.temp('.mp4')
-    Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options('color=white:s=320x240:r=60:d=4, split [wh1a] [wh1b]', 'color=black:s=320x240:r=60:d=4, split [bl1a] [bl1b]', 'sine=880:d=4, asplit [na5a] [na5b]', 'aevalsrc=0:d=4, asplit [si1a] [si1b]', '[wh1a] [na5a] [bl1a] [si1a] [wh1b] [na5b] [bl1b] [si1b] concat=4:v=1:a=1'), @av_file_wtb.path
-    @v_file = Ffmprb::File.temp('.y4m')
-    # XXX produces warning: [yuv4mpegpipe @ 0xXXXX] Encoder did not produce proper pts, making some up.
-    Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options('color=c=red:r=30:d=6:s=320x240, setpts=PTS-STARTPTS [red]', 'color=c=green:r=30:d=6:s=280x200 [green]', '[red] [green] overlay=20:20'), '-pix_fmt', 'yuv420p', @v_file.path
-    @a_file = Ffmprb::File.temp('.mp3')
-    Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options('sine=666:d=4, asplit [aa5a] [aa5b]', 'aevalsrc=0:d=4, asplit [si1a] [si1b]', '[aa5a] [si1a] [aa5b] [si1b] concat=4:v=0:a=1'), @a_file.path
-  end
-
-  let (:av_file_gor) {@av_file_gor}
-  let (:av_file_wtb) {@av_file_wtb}
-  let (:v_file) {@v_file}
-  let (:a_file) {@a_file}
-
-  after :all do
-    @av_file_gor.remove
-    @av_file_wtb.remove
-    @v_file.remove
-    @a_file.remove
-  end
 
 
   it 'has a version number' do
@@ -90,7 +45,21 @@ describe Ffmprb do
     let(:stream_av_out_file) {@stream_av_out_file}
 
     it "should transcode" do
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+
+        in1 = input(file_input)
+        output(file_output, resolution: Ffmprb::QVGA) do
+          roll in1
+        end
+
+      end
+
+      expect(av_out_file.resolution).to eq Ffmprb::QVGA
+      expect(av_out_file.length).to be_approximately 6
+    end
+
+    it "should parse path arguments (and transcode)" do
+      Ffmprb.process(@av_file_gor.path, av_out_file.path) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -104,7 +73,7 @@ describe Ffmprb do
     end
 
     it "should concat" do
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -118,7 +87,7 @@ describe Ffmprb do
     end
 
     it "should roll reels after specific time" do
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -130,7 +99,7 @@ describe Ffmprb do
 
       expect(av_out_file.length).to be_approximately 9
 
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -145,7 +114,7 @@ describe Ffmprb do
 
     [9, 18].each do |duration|
       it "should cut to precise duration (total 12 <=> cut after #{duration})" do
-        Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+        Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
           in1 = input(file_input)
           output(file_output, resolution: Ffmprb::QVGA) do
@@ -160,7 +129,7 @@ describe Ffmprb do
     end
 
     it "should crop segments" do
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -183,7 +152,7 @@ describe Ffmprb do
     end
 
     it "should cut and crop segments" do
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -207,7 +176,7 @@ describe Ffmprb do
     end
 
     it "should cut segments in any order" do
-      Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -231,7 +200,7 @@ describe Ffmprb do
     end
 
     it "should detect silence and pass input to output" do
-      silence = Ffmprb.find_silence(av_file_wtb, av_out_file)
+      silence = Ffmprb.find_silence(@av_file_wtb, av_out_file)
       expect(silence.length).to eq 2
       prev_silent_end_at = 0
       silence.each do |silent|
@@ -253,7 +222,7 @@ describe Ffmprb do
 
     context "media" do
 
-      let(:m_input) {{video: v_file, audio: a_file}}
+      let(:m_input) {{video: @v_file, audio: @a_file}}
       let(:m_output_extname) {{video: '.y4m', audio: '.mp3'}}
 
       [:video, :audio].each do |medium|
@@ -306,7 +275,7 @@ describe Ffmprb do
 
             Ffmprb::File.temp(m_output_extname[medium]) do |m_output|
 
-              Ffmprb.process(av_file_gor, m_input[medium], m_output, &script)
+              Ffmprb.process(@av_file_gor, m_input[medium], m_output, &script)
 
               m_output.sample(at: 2.5, medium => true, ([:video, :audio] - [medium])[0] => false) do |sample|
                 case medium
@@ -346,7 +315,7 @@ describe Ffmprb do
       let(:another_file_input) {Ffmprb::File.open another_input_path}
 
       it "should transition between two reels" do
-        Ffmprb.process(av_file_gor, another_file_input, av_out_file) do |input1, input2, output1|
+        Ffmprb.process(@av_file_gor, another_file_input, av_out_file) do |input1, input2, output1|
 
           in1, in2 = input(input1), input(input2)
           output(output1, resolution: Ffmprb::QVGA) do
@@ -453,7 +422,7 @@ describe Ffmprb do
 
       it "should overlay sound with volume" do
         # NOTE non-streaming output file requires additional development see #181845
-        Ffmprb.process(av_file_wtb, a_file, stream_av_out_file) do |input1, input2, output1|
+        Ffmprb.process(@av_file_wtb, @a_file, stream_av_out_file) do |input1, input2, output1|
 
           in1 = input(input1)
           in2 = input(input2, only: :audio)
@@ -497,7 +466,7 @@ describe Ffmprb do
             Ffmprb::Util::IoBuffer.block_size = 8*1024
 
             # NOTE non-streaming output file requires additional development see #181845
-            Ffmprb.process(av_file_wtb, a_file, stream_av_out_file) do |input1, input2, output1|
+            Ffmprb.process(@av_file_wtb, @a_file, stream_av_out_file) do |input1, input2, output1|
 
               in1 = input(input1)
               in2 = input(input2, only: :audio)
@@ -529,7 +498,7 @@ describe Ffmprb do
             Ffmprb::Util::IoBuffer.block_size = 8*1024
 
             # NOTE non-streaming output file requires additional development see #181845
-            Ffmprb.process(a_file, a_out_file) do |input1, output1|
+            Ffmprb.process(@a_file, a_out_file) do |input1, output1|
 
               in1 = input(input1, only: :audio)
               output(output1) do
@@ -556,7 +525,7 @@ describe Ffmprb do
       let(:output_extname) {'.jpg'}
 
       xit "should shoot snaps" do  # XXX not sure if this functionality is needed
-        Ffmprb.process(av_file_gor, av_out_file) do |file_input, file_output|
+        Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
 
           in1 = input(file_input)
           video(resolution: Ffmprb::HD_1080p) do
@@ -577,7 +546,7 @@ describe Ffmprb do
   context :info do
 
     it "should return the length of a clip" do
-      expect(av_file_gor.length).to be_approximately 6
+      expect(@av_file_gor.length).to be_approximately 6
     end
 
   end
