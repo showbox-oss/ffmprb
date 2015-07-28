@@ -5,7 +5,7 @@ module Ffmprb
     class Output
 
       def initialize(io, only: nil, resolution: Ffmprb::QVGA, fps: 30)
-        @io = io
+        @io = resolve(io)
         @channels = [*only]
         @channels = nil  if @channels.empty?
         @resolution = resolution
@@ -281,13 +281,26 @@ module Ffmprb
         add_reel reel, after, transition, (onto == :full_screen)
       end
 
-      # XXX? protected
-
       def channel?(medium, force=false)
         return @channels && @channels.include?(medium)  if force
 
         (!@channels || @channels.include?(medium)) &&
           reels_channel?(medium)
+      end
+
+      protected
+
+      def resolve(io)
+        return io  unless io.is_a? String
+
+        case io
+        when /^\/\w/
+          File.create(io).tap do |file|
+            Ffmprb.logger.warn "Output file exists (#{file.path}), will overwrite"  if file.exist?
+          end
+        else
+          raise Error, "Cannot resolve output: #{io}"
+        end
       end
 
       private

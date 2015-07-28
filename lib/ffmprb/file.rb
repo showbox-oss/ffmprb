@@ -100,6 +100,10 @@ module Ffmprb
 
     # Info
 
+    def exist?
+      ::File.exist? path
+    end
+
     def extname
       ::File.extname path
     end
@@ -152,6 +156,13 @@ module Ffmprb
     end
 
     # Manipulation
+
+    def read
+      ::File.read path
+    end
+    def write(s)
+      ::File.write path, s
+    end
 
     def remove
       FileUtils.remove_entry path

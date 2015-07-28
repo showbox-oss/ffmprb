@@ -105,7 +105,7 @@ module Ffmprb
 
 
       def initialize(io, only: nil)
-        @io = io
+        @io = resolve(io)
         @channels = [*only]
         @channels = nil  if @channels.empty?
         raise Error, "Inadequate A/V channels"  if
@@ -162,13 +162,24 @@ module Ffmprb
         Loud.new self, volume: vol
       end
 
-      # XXX? protected
-
       def channel?(medium, force=false)
         return @channels && @channels.include?(medium)  if force
 
         (!@channels || @channels.include?(medium)) &&
           (!@io.respond_to?(:channel?) || @io.channel?(medium))
+      end
+
+      protected
+
+      def resolve(io)
+        return io  unless io.is_a? String
+
+        case io
+        when /^\/\w/
+          File.open io
+        else
+          raise Error, "Cannot resolve input: #{io}"
+        end
       end
 
     end
