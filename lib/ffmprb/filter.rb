@@ -18,8 +18,7 @@ module Ffmprb
         inout "afade=out:d=#{duration}", input, output
       end
 
-      # NOTE inputs order matters
-      def amix(inputs, output=nil)
+      def amix_to_first(inputs, output=nil)
         inout "amix=#{[*inputs].length}:duration=first", inputs, output
       end
 
@@ -169,7 +168,7 @@ module Ffmprb
           filters.concat [
             *afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
             *afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
-            *amix(["#{auxx_lbl}:a", "#{aux_lbl}:a"], "#{output}:a")
+            *amix_to_first(["#{auxx_lbl}:a", "#{aux_lbl}:a"], "#{output}:a")
           ]  if audio
         end
       end
@@ -182,8 +181,9 @@ module Ffmprb
         inout "volume='#{volume_exp volume}':eval=frame", input, output
       end
 
-      def volume_exp(volume)  # NOTE volume is an ordered Hash
-        return volume  unless volume.respond_to?(:each)
+      def volume_exp(volume)
+        return volume  unless volume.is_a?(Hash)
+
         raise Error, "volume cannot be empty"  if volume.empty?
 
         prev_at = 0.0

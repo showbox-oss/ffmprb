@@ -12,6 +12,8 @@ module Ffmprb
         @fps = 30
       end
 
+      # XXX This method is exceptionally long at the moment. This is not too grand.
+      # However, structuring the code should be undertaken with care, as not to harm the composition clarity.
       def options(process)
         # XXX TODO manage stream labels through process
         raise Error, "Nothing to roll..."  if @reels.select(&:reel).empty?
@@ -21,7 +23,6 @@ module Ffmprb
 
         # Concatting
         segments = []
-        Ffmprb.logger.debug "Concatting segments: start"
 
         @reels.each_with_index do |curr_reel, i|
 
@@ -55,7 +56,6 @@ module Ffmprb
             # NOTE make sure previous reel rolls _long_ enough AND then _just_ enough
 
             prev_lbl = segments.pop
-            Ffmprb.logger.debug "Concatting segments: #{prev_lbl} popped"
 
             lbl_pad = "bl#{prev_lbl}#{i}"
             # NOTE generously padding the previous segment to support for all the cases
@@ -141,7 +141,6 @@ module Ffmprb
           end
 
           segments << lbl  # NOTE can be nil
-          Ffmprb.logger.debug "Concatting segments: #{lbl} pushed"
         end
 
         segments.compact!
@@ -174,7 +173,7 @@ module Ffmprb
             filters +=
               Filter.copy("#{lbl_out}:v", "#{lbl_nxt}:v")  if channel?(:video)
             filters +=
-              Filter.amix(["#{lbl_out}:a", "#{lbl_over}:a"], "#{lbl_nxt}:a")  if channel?(:audio)
+              Filter.amix_to_first(["#{lbl_out}:a", "#{lbl_over}:a"], "#{lbl_nxt}:a")  if channel?(:audio)
 
             lbl_out = lbl_nxt
           end
