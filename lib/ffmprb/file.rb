@@ -13,16 +13,9 @@ module Ffmprb
         output_fifo_file = temp_fifo(extname)
 
         Ffmprb.logger.debug "Opening #{input_fifo_file.path}>#{output_fifo_file.path} for buffering"
-        buff = Util::IoBuffer.new(
-          ->{
-            Ffmprb.logger.debug "Trying to open #{input_fifo_file.path} for reading+buffering"
-            ::File.open(input_fifo_file.path, 'r')
-          },
-          ->{
-            Ffmprb.logger.debug "Trying to open #{output_fifo_file.path} for buffering+writing"
-            ::File.open(output_fifo_file.path, 'w')
-            }
-          )
+        buff = Util::IoBuffer.new(async_opener(input_fifo_file, 'r'), async_opener(output_fifo_file, 'w'))
+
+        # NOTE the blocking cleanup thread to join for synchronisation
         thr = Util::Thread.new do
           buff.flush!
           Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} ended"
@@ -31,7 +24,7 @@ module Ffmprb
         end
         Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} started"
 
-        yield buff  if block_given?  # XXX a hidden option
+        # XXX see io_buffer's XXX yield buff  if block_given?
 
         OpenStruct.new in: input_fifo_file, out: output_fifo_file, thr: thr
       end
@@ -83,6 +76,15 @@ module Ffmprb
         ::File.join Dir.tmpdir, Dir::Tmpname.make_tmpname('', 'p' + extname)
       end
 
+      protected
+
+      def async_opener(file, mode)
+        ->{
+          Ffmprb.logger.debug "Trying to open #{file.path} for #{mode}-buffering"
+          ::File.open(file.path, mode)
+        }
+      end
+
     end
 
 
@@ -108,11 +110,27 @@ module Ffmprb
       ::File.extname path
     end
 
-    def length
-      @duration ||= probe['format']['duration']
-      return @duration.to_f  if @duration
+    def channel?(medium)
+      case medium
+      when :video
+        image_extname? || movie_extname?
+      when :audio
+        sound_extname? || movie_extname?
+      end
+    end
 
-      @duration = probe(true)['frames'].reduce(0){|sum, frame| sum + frame['pkt_duration_time'].to_f}
+    def length
+      return @duration  if @duration
+
+      # NOTE first attempt
+      @duration = probe['format']['duration']
+      @duration &&= @duration.to_f
+      return @duration  if @duration
+
+      # NOTE a harder try
+      @duration = probe(true)['frames'].reduce(0) do |sum, frame|
+        sum + frame['pkt_duration_time'].to_f
+      end
     end
 
     def resolution
@@ -131,9 +149,9 @@ module Ffmprb
 
       Ffmprb.logger.debug "Snap shooting files, video path: #{video ? video.path : 'NONE'}, audio path: #{audio ? audio.path : 'NONE'}"
 
-      raise Error, "Incorrect output extname (must be .jpg)"  unless !video || video.extname =~ /jpe?g$/
-      raise Error, "Incorrect audio extname (must be .mp3)"  unless !audio || audio.extname =~ /mp3$/
-      raise Error, "Can sample either video OR audio UNLESS a block is given"  unless block_given? || (!!audio != !!video)
+      raise Error, "Incorrect output extname (must be .jpg)"  unless !video || video.channel?(:video) && !video.channel?(:audio)
+      raise Error, "Incorrect audio extname (must be .mp3)"  unless !audio || audio.channel?(:audio) && !audio.channel?(:video)
+      raise Error, "Can sample either video OR audio UNLESS a block is given"  unless block_given? || !!audio != !!video
 
       cmd = ['-i', path]
       cmd += ['-deinterlace', '-an', '-ss', at, '-r', 1, '-vcodec', 'mjpeg', '-f', 'mjpeg', video.path]  if video
@@ -181,13 +199,25 @@ module Ffmprb
       end
     end
 
-    def probe(force=false)
-      return @probe  unless !@probe || force
+    def probe(harder=false)
+      return @probe  unless !@probe || harder
       cmd = ['-v', 'quiet', '-i', path, '-print_format', 'json', '-show_format', '-show_streams']
-      cmd << '-show_frames'  if force
+      cmd << '-show_frames'  if harder
       @probe = JSON.parse(Util::ffprobe *cmd).tap do |probe|
         raise Error, "This doesn't look like a ffprobable file"  unless probe['streams']
       end
+    end
+
+    def image_extname?
+      extname =~ /^\.(jpe?g|y4m)$/i
+    end
+
+    def sound_extname?
+      extname =~ /^\.(mp3|wav)$/i
+    end
+
+    def movie_extname?
+      extname =~ /^\.(mp4|flv)$/i
     end
 
   end

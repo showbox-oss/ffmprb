@@ -34,14 +34,18 @@ module Ffmprb
 
   class << self
 
+    # NOTE the form with the block returns the result of #run
+    # NOTE the form without the block returns the process (before it is run)
     def process(*args, &blk)
       logger.debug "Starting process with #{args} in #{blk.source_location}"
-      Process.new.tap do |process|
-        if blk
-          process.instance_exec *args, &blk
-          process.run
-          logger.debug "Finished process with #{args} in #{blk.source_location}"
-        end
+      process = Process.new
+      return process  unless blk
+
+      process.instance_exec *args, &blk
+      logger.debug "Initialized process with #{args} in #{blk.source_location}"
+
+      process.run.tap do
+        logger.debug "Finished process with #{args} in #{blk.source_location}"
       end
     end
     alias :action! :process  # ;)

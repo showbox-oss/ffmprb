@@ -282,9 +282,9 @@ module Ffmprb
       end
 
       def channel?(medium, force=false)
-        return @channels && @channels.include?(medium)  if force
+        return !!@channels && @channels.include?(medium) && @io.channel?(medium)  if force
 
-        (!@channels || @channels.include?(medium)) &&
+        (!@channels || @channels.include?(medium)) && @io.channel?(medium) &&
           reels_channel?(medium)
       end
 
