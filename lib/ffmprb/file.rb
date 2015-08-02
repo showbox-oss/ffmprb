@@ -139,10 +139,11 @@ module Ffmprb
     end
 
 
-    def sample(  # NOTE can snap output (an image) or audio (a sound) or both
+    def sample(
       at: 0.01,
       video: true,
-      audio: nil
+      audio: true,
+      &blk
     )
       audio = File.temp('.mp3')  if audio == true
       video = File.temp('.jpg')  if video == true
@@ -155,7 +156,7 @@ module Ffmprb
 
       cmd = ['-i', path]
       cmd += ['-deinterlace', '-an', '-ss', at, '-r', 1, '-vcodec', 'mjpeg', '-f', 'mjpeg', video.path]  if video
-      cmd += ['-vn', '-ss', at, '-t', 1, '-f', 'mp3', audio.path]  if audio
+      cmd += ['-vn', '-ss', at, '-t', 1, audio.path]  if audio
       Util.ffmpeg *cmd
 
       return video || audio  unless block_given?
@@ -171,6 +172,12 @@ module Ffmprb
           Ffmprb.logger.warn "Error removing sample files: #{$!.message}"
         end
       end
+    end
+    def sample_video(*video, at: 0.01, &blk)
+      sample at: at, video: (video.first || true), audio: false, &blk
+    end
+    def sample_audio(*audio, at: 0.01, &blk)
+      sample at: at, video: false, audio: (audio.first || true), &blk
     end
 
     # Manipulation

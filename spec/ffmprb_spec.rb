@@ -23,16 +23,12 @@ describe Ffmprb do
 
   context :process do
 
-    let(:a_out_extname) {'.mp3'}
-    let(:output_extname) {'.mp4'}
-    let(:stream_output_extname) {'.flv'}
-
     around do |example|
-      Ffmprb::File.temp(output_extname) do |tf|
+      Ffmprb::File.temp('.mp4') do |tf|
         @av_out_file = tf
-        Ffmprb::File.temp(stream_output_extname) do |tf|
-          @stream_av_out_file = tf
-          Ffmprb::File.temp(a_out_extname) do |tf|
+        Ffmprb::File.temp('.flv') do |tf|
+          @av_out_stream = tf
+          Ffmprb::File.temp('.mp3') do |tf|
             @a_out_file = tf
             example.run
           end
@@ -40,26 +36,22 @@ describe Ffmprb do
       end
     end
 
-    let(:a_out_file) {@a_out_file}
-    let(:av_out_file) {@av_out_file}
-    let(:stream_av_out_file) {@stream_av_out_file}
-
     it "should transcode" do
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
-        output(file_output, resolution: Ffmprb::QVGA) do
+        output(file_output, resolution: Ffmprb::HD_720p) do
           roll in1
         end
 
       end
 
-      expect(av_out_file.resolution).to eq Ffmprb::QVGA
-      expect(av_out_file.length).to be_approximately 6
+      expect(@av_out_file.resolution).to eq Ffmprb::HD_720p
+      expect(@av_out_file.length).to be_approximately 6
     end
 
     it "should parse path arguments (and transcode)" do
-      Ffmprb.process(@av_file_gor.path, av_out_file.path) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor.path, @av_out_file.path) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -68,12 +60,12 @@ describe Ffmprb do
 
       end
 
-      expect(av_out_file.resolution).to eq Ffmprb::QVGA
-      expect(av_out_file.length).to be_approximately 6
+      expect(@av_out_file.resolution).to eq Ffmprb::QVGA
+      expect(@av_out_file.length).to be_approximately 6
     end
 
     it "should concat" do
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -83,11 +75,11 @@ describe Ffmprb do
 
       end
 
-      expect(av_out_file.length).to be_approximately 12
+      expect(@av_out_file.length).to be_approximately 12
     end
 
     it "should roll reels after specific time" do
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -97,9 +89,9 @@ describe Ffmprb do
 
       end
 
-      expect(av_out_file.length).to be_approximately 9
+      expect(@av_out_file.length).to be_approximately 9
 
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -108,13 +100,13 @@ describe Ffmprb do
 
       end
 
-      expect(av_out_file.length).to be_approximately 9
+      expect(@av_out_file.length).to be_approximately 9
     end
 
 
     [9, 18].each do |duration|
       it "should cut to precise duration (total 12 <=> cut after #{duration})" do
-        Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+        Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
           in1 = input(file_input)
           output(file_output, resolution: Ffmprb::QVGA) do
@@ -124,12 +116,12 @@ describe Ffmprb do
           end
         end
 
-        expect(av_out_file.length).to be_approximately duration
+        expect(@av_out_file.length).to be_approximately duration
       end
     end
 
     it "should crop segments" do
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -139,12 +131,12 @@ describe Ffmprb do
 
       end
 
-      av_out_file.sample(at: 5, audio: true) do |snap, sound|
+      @av_out_file.sample(at: 5) do |snap, sound|
         pixel = pixel_data(snap, 10, 10)
         expect(pixel.red + pixel.blue).to be < pixel.green/2
         expect(wave_data(sound).frequency).to be_within(10).of 1000
       end
-      av_out_file.sample(at: 7, audio: true) do |shot, sound|
+      @av_out_file.sample(at: 7) do |shot, sound|
         pixel = pixel_data(shot, 10, 10)
         expect(pixel.green + pixel.blue).to be < pixel.red/2
         expect(wave_data(sound).frequency).to be_within(10).of 1000
@@ -152,7 +144,7 @@ describe Ffmprb do
     end
 
     it "should cut and crop segments" do
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -162,21 +154,21 @@ describe Ffmprb do
 
       end
 
-      av_out_file.sample(at: 2, audio: true) do |snap, sound|
+      @av_out_file.sample(at: 2) do |snap, sound|
         pixel = pixel_data(snap, 10, 10)
         expect(pixel.red + pixel.blue).to be < pixel.green/2
         expect(wave_data(sound).frequency).to be_within(10).of 1000
       end
-      av_out_file.sample(at: 5, audio: true) do |shot, sound|
+      @av_out_file.sample(at: 5) do |shot, sound|
         pixel = pixel_data(shot, 10, 10)
         expect(pixel.green + pixel.blue).to be < pixel.red/2
         expect(wave_data(sound).frequency).to be_within(10).of 1000
       end
-      expect(av_out_file.length).to be_approximately 9
+      expect(@av_out_file.length).to be_approximately 9
     end
 
     it "should cut segments in any order" do
-      Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
+      Ffmprb.process(@av_file_gor, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
         output(file_output, resolution: Ffmprb::QVGA) do
@@ -186,31 +178,31 @@ describe Ffmprb do
 
       end
 
-      av_out_file.sample(at: 1, audio: true) do |shot, sound|
+      @av_out_file.sample(at: 1) do |shot, sound|
         pixel = pixel_data(shot, 10, 10)
         expect(pixel.green + pixel.blue).to be < pixel.red/2
         expect(wave_data(sound).frequency).to be_approximately 1000
       end
-      av_out_file.sample(at: 3, audio: true) do |snap, sound|
+      @av_out_file.sample(at: 3) do |snap, sound|
         pixel = pixel_data(snap, 10, 10)
         expect(pixel.red + pixel.blue).to be < pixel.green/2
         expect(wave_data(sound).frequency).to be_within(10).of 1000
       end
-      expect(av_out_file.length).to be_approximately 4
+      expect(@av_out_file.length).to be_approximately 4
     end
 
     it "should detect silence and pass input to output" do
-      silence = Ffmprb.find_silence(@av_file_wtb, av_out_file)
+      silence = Ffmprb.find_silence(@av_file_wtb, @av_out_file)
       expect(silence.length).to eq 2
       prev_silent_end_at = 0
       silence.each do |silent|
-        av_out_file.sample at: silent.start_at + 1, audio: true do |image, sound|
+        @av_out_file.sample at: silent.start_at + 1 do |image, sound|
           expect(wave_data(sound).volume).to eq nil
           pixel_data(image, 100, 100).tap do |pixel|
             expect(pixel.red + pixel.green + pixel.blue).to eq 0
           end
         end
-        av_out_file.sample at: (prev_silent_end_at + silent.start_at)/2, audio: true do |image, sound|
+        @av_out_file.sample at: (prev_silent_end_at + silent.start_at)/2 do |image, sound|
           expect(wave_data(sound).volume).not_to eq nil
           pixel_data(image, 100, 100).tap do |pixel|
             expect(pixel.red + pixel.green + pixel.blue).to eq 3*0xFFFF
@@ -310,12 +302,8 @@ describe Ffmprb do
 
     context "stitching" do
 
-      let(:another_input_filename) {'spec/support/assets/rainbow-octave-14sec-60fps-320x240.mp4'}
-      let(:another_input_path) {File.expand_path("../../#{another_input_filename}", __FILE__)}
-      let(:another_file_input) {Ffmprb::File.open another_input_path}
-
       it "should transition between two reels" do
-        Ffmprb.process(@av_file_gor, another_file_input, av_out_file) do |input1, input2, output1|
+        Ffmprb.process(@av_file_gor, @av_file_ro7, @av_out_file) do |input1, input2, output1|
 
           in1, in2 = input(input1), input(input2)
           output(output1, resolution: Ffmprb::QVGA) do
@@ -329,7 +317,7 @@ describe Ffmprb do
         last_volume = 0
         times = [0, 1, 2]
         times.each do |at|
-          av_out_file.sample(at: at, audio: true) do |snap, sound|
+          @av_out_file.sample(at: at) do |snap, sound|
             pixel = pixel_data(snap, 10, 10)
             expect(pixel.red + pixel.blue).to be < pixel.green/2
             expect(pixel.green).to be > last_green  unless at == times.first
@@ -345,7 +333,7 @@ describe Ffmprb do
         last_frequency = 0
         times = [3.5, 4, 4.5]
         times.each do |at|
-          av_out_file.sample(at: at, audio: true) do |snap, sound|
+          @av_out_file.sample(at: at) do |snap, sound|
             pixel = pixel_data(snap, 10, 10)
             expect(pixel.green + pixel.blue).to be < pixel.red/2  if at == times.last
             expect(pixel.red).to be > last_red  if at != times.first
@@ -357,11 +345,11 @@ describe Ffmprb do
           end
         end
 
-        expect(av_out_file.length).to be_approximately 17
+        expect(@av_out_file.length).to be_approximately 17
       end
 
       it "should montage a flick with transitions" do
-        Ffmprb.process(another_file_input, av_out_file) do |input1, output1|
+        Ffmprb.process(@av_file_ro7, @av_out_file) do |input1, output1|
 
           in1 = input(input1)
           output(output1, resolution: Ffmprb::QVGA) do
@@ -374,7 +362,7 @@ describe Ffmprb do
         end
 
         reds = [0.25, 0.5, 1].map do |at|
-          av_out_file.sample(at: at) do |snap|
+          @av_out_file.sample_video at: at do |snap|
             pixel_data(snap, 100, 100).red
           end
         end
@@ -382,7 +370,7 @@ describe Ffmprb do
         expect(reds).to eq reds.sort
 
         greens = [2.25, 2.5, 3].map do |at|
-          av_out_file.sample(at: at) do |snap|
+          @av_out_file.sample_video at: at do |snap|
             pixel_data(snap, 100, 100).green
           end
         end
@@ -390,7 +378,7 @@ describe Ffmprb do
         # expect(greens).to eq greens.sort
 
         blues = [4.25, 4.5, 5].map do |at|
-          av_out_file.sample(at: at) do |snap|
+          @av_out_file.sample_video at: at do |snap|
             pixel_data(snap, 100, 100).blue
           end
         end
@@ -398,14 +386,14 @@ describe Ffmprb do
         # expect(blues).to eq blues.sort
 
         blues2 = [6, 6.25, 6.75].map do |at|
-          av_out_file.sample(at: at) do |snap|
+          @av_out_file.sample_video at: at do |snap|
             pixel_data(snap, 100, 100).blue
           end
         end
         expect(blues2).to eq blues2.uniq
         # expect(blues2.reverse).to eq blues2.sort.reverse
 
-        expect(av_out_file.length).to be_approximately 7
+        expect(@av_out_file.length).to be_approximately 7
       end
 
       it "should run an external effect tool for a transition"
@@ -421,8 +409,7 @@ describe Ffmprb do
       end
 
       it "should overlay sound with volume" do
-        # NOTE non-streaming output file requires additional development see #181845
-        Ffmprb.process(@av_file_wtb, @a_file, stream_av_out_file) do |input1, input2, output1|
+        Ffmprb.process(@av_file_wtb, @a_file, @av_out_file) do |input1, input2, output1|
 
           in1 = input(input1)
           in2 = input(input2, only: :audio)
@@ -435,7 +422,7 @@ describe Ffmprb do
 
         vols = []
 
-        stream_av_out_file.sample(at: 2, audio: true) do |snap, sound|
+        @av_out_file.sample at: 2 do |snap, sound|
           pixel = pixel_data(snap, 100, 100)
           expect(pixel.red + pixel.green + pixel.blue).to eq 3*0xFFFF
           wave = wave_data(sound)
@@ -443,21 +430,16 @@ describe Ffmprb do
           vols << wave.volume
         end
 
-        vols << wave_data(stream_av_out_file.sample(at: 3, video: false, audio: true)).volume
+        vols << wave_data(@av_out_file.sample_audio at: 3).volume
 
-        stream_av_out_file.sample(at: 6, audio: true) do |snap, sound|
+        @av_out_file.sample at: 6 do |snap, sound|
           pixel = pixel_data(snap, 100, 100)
           expect(pixel.red + pixel.green + pixel.blue).to eq 0
           wave = wave_data(sound)
           vols << wave.volume
         end
 
-        prev_vol = -9999
-        vols.each do |vol|
-          expect(vol).to be > prev_vol
-          prev_vol = vol
-        end
-
+        expect(vols).to be_ascending
       end
 
       it "should duck the overlay sound wrt the main sound" do
@@ -466,7 +448,7 @@ describe Ffmprb do
             Ffmprb::Util::IoBuffer.block_size = 8*1024
 
             # NOTE non-streaming output file requires additional development see #181845
-            Ffmprb.process(@av_file_wtb, @a_file, stream_av_out_file) do |input1, input2, output1|
+            Ffmprb.process(@av_file_wtb, @a_file, @av_out_stream) do |input1, input2, output1|
 
               in1 = input(input1)
               in2 = input(input2, only: :audio)
@@ -477,12 +459,12 @@ describe Ffmprb do
 
             end
 
-            stream_av_out_file.sample(at: 2, audio: true) do |snap, sound|
+            @av_out_stream.sample at: 2 do |snap, sound|
               pixel = pixel_data(snap, 100, 100)
               expect(wave_data(sound).frequency).to be_between(666, 880)
             end
 
-            stream_av_out_file.sample(at: 6, audio: true) do |snap, sound|
+            @av_out_stream.sample at: 6 do |snap, sound|
               pixel = pixel_data(snap, 100, 100)
               expect(wave_data(sound).frequency).to be_within(10).of 666
             end
@@ -498,7 +480,7 @@ describe Ffmprb do
             Ffmprb::Util::IoBuffer.block_size = 8*1024
 
             # NOTE non-streaming output file requires additional development see #181845
-            Ffmprb.process(@a_file, a_out_file) do |input1, output1|
+            Ffmprb.process(@a_file, @a_out_file) do |input1, output1|
 
               in1 = input(input1, only: :audio)
               output(output1) do
@@ -508,10 +490,10 @@ describe Ffmprb do
 
             end
 
-            expect(a_out_file.length).to be_approximately(8)
+            expect(@a_out_file.length).to be_approximately(8)
 
-            expect(wave_data(a_out_file.sample(at: 2, video: false, audio: true)).frequency).to be_within(10).of 666
-            expect(wave_data(a_out_file.sample(at: 6, video: false, audio: true)).frequency).to be_within(10).of 666
+            expect(wave_data(@a_out_file.sample_audio at: 2).frequency).to be_within(10).of 666
+            expect(wave_data(@a_out_file.sample_audio at: 6).frequency).to be_within(10).of 666
           ensure
             Ffmprb::Util::IoBuffer.block_size = block_size
           end
@@ -522,22 +504,7 @@ describe Ffmprb do
 
     context :samples do
 
-      let(:output_extname) {'.jpg'}
-
-      xit "should shoot snaps" do  # XXX not sure if this functionality is needed
-        Ffmprb.process(@av_file_gor, av_out_file) do |file_input, file_output|
-
-          in1 = input(file_input)
-          video(resolution: Ffmprb::HD_1080p) do
-            roll in1
-            sample file_output, at: 3
-          end
-
-        end
-
-        pixel = pixel_data(snap, 10, 10)
-        expect(pixel.red + pixel.blue).to be < pixel.green/2
-      end
+      it "should shoot snaps"  # XXX not sure if this functionality is needed
 
     end
 

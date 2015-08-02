@@ -295,7 +295,7 @@ module Ffmprb
         case io
         when /^\/\w/
           File.create(io).tap do |file|
-            Ffmprb.logger.warn "Output file exists (#{file.path}), will overwrite"  if file.exist?
+            Ffmprb.logger.warn "Output file exists (#{file.path}), will probably overwrite"  if file.exist?
           end
         else
           raise Error, "Cannot resolve output: #{io}"
