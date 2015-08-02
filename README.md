@@ -1,5 +1,6 @@
 # ffmprb
 [![Gem Version](https://badge.fury.io/rb/ffmprb.svg)](http://badge.fury.io/rb/ffmprb)
+[![Circle CI](https://circleci.com/gh/showbox-oss/ffmprb.svg?style=svg)](https://circleci.com/gh/showbox-oss/ffmprb)
 ## your audio/video montage friend, based on [ffmpeg](https://ffmpeg.org)
 
 A DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends.
@@ -33,8 +34,9 @@ ffmpeg -y -i /tmp/inter1a.flv -filter_complex "silencedetect=d=2:n=-30dB" /tmp/i
 ffmpeg -y -i /tmp/inter2.flv -i /tmp/inter1b.wav -filter_complex "[0:v] copy [sp0:v]; [0:a] anull [sp0:a]; [sp0:v] scale=iw*min(1280/iw\,720/ih):ih*min(1280/iw\,720/ih), pad=1280:720:(1280-iw*min(1280/iw\,720/ih))/2:(720-ih*min(1280/iw\,720/ih))/2, fps=fps=30 [rl0:v]; [sp0:a] anull [rl0:a]; [rl0:v] concat=1:v=1:a=0 [oo:v]; [rl0:a] concat=1:v=0:a=1 [oo:a]; [1:a] anull [ldol0:a]; [ldol0:a] volume='if(between(t, 9.5, 10.5), (-0.8*t + 8.500000000000002)/1.0, if(between(t, 0.5, 9.5), 0.9, if(between(t, -0.5, 0.5), (0.8*t + 0.5)/1.0, if(between(t, 0.0, -0.5), 0.1, if(between(t, 0.0, 0.0), 0.1, 0.1)))))':eval=frame [ol0:a]; [oo:v] copy [oo0:v]; [oo:a] [ol0:a] amix=2:duration=first [oo0:a]" -map "[oo0:v]" -map "[oo0:a]" cine.flv
 ```
 Umm... That's the idea.
-The docs, as well as any other part of this gem, are a work in progress.
-So you're very welcome to look around the [specs](https://github.com/showbox-oss/ffmprb/tree/master/spec) for the current functionality coverage.
+
+The docs, as well as any other part of this gem, are totally a work in progress.
+So you're very welcome to look around the [specs](https://github.com/showbox-oss/ffmprb/tree/master/spec) for the current functionality coverage, or in the gem's ["main"](https://github.com/showbox-oss/ffmprb/blob/master/lib/ffmprb.rb) for useful constants and configuration options.
 
 ## Installation
 

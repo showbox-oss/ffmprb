@@ -2,12 +2,14 @@ describe Ffmprb::Execution do
 
   let(:ffmprb_src) { <<-FFMPRB
     |av_main_i, a_over_i, av_main_o|
+
     in1 = input(av_main_i)
     in2 = input(a_over_i, only: :audio)
     output(av_main_o) do
       roll in1
       overlay in2
     end
+
     FFMPRB
   }
   around do |example|
