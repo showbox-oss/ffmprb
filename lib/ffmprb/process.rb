@@ -73,13 +73,15 @@ module Ffmprb
 
     # NOTE the one and the only entry-point processing function which spawns threads etc
     def run(limit: nil)  # (async: false)
-      Util::Thread.new do # NOTE this is both for the future async: option and according to
-                          # the threading policy (a parent death will be noticed and handled by children)
+      # NOTE this is both for the future async: option and according to
+      # the threading policy (a parent death will be noticed and handled by children)
+      thr = Util::Thread.new do
         # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
         Util.ffmpeg(*command, limit: limit, timeout: timeout).tap do |res|  # XXX just to return something
           Util::Thread.join_children! limit, timeout: timeout
         end
-      end.join
+      end
+      thr.value  if thr.join limit  # NOTE should not block for more than limit
     end
 
     def [](obj)
