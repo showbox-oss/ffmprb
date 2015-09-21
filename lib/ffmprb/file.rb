@@ -190,5 +190,3 @@ module Ffmprb
   end
 
 end
-
-require 'ffmprb/file/sample'

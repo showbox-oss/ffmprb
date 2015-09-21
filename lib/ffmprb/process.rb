@@ -1,6 +1,3 @@
-require 'ffmprb/process/input'
-require 'ffmprb/process/output'
-
 module Ffmprb
 
   class Process

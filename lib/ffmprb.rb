@@ -13,7 +13,8 @@ module Ffmprb
   class << self
 
     # NOTE the form with the block returns the result of #run
-    # NOTE the form without the block returns the process (before it is run)
+    # NOTE the form without the block returns the process (before it is run) - advanced use
+    # XXX is this clear enough? Do we really need the second form?
     def process(*args, &blk)
       logger.debug "Starting process with #{args} in #{blk.source_location}"
       process = Process.new
@@ -47,12 +48,6 @@ end
 
 Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
 
-require 'ffmprb/version'
-require 'ffmprb/execution'
-require 'ffmprb/file'
-require 'ffmprb/filter'
-require 'ffmprb/find_silence'
-require 'ffmprb/process'
-require 'ffmprb/util'
+Dir["#{__FILE__.slice /(.*).rb$/, 1}/**/*.rb"].each{|f| require f}  # XXX require_sub  __FILE__  # or something
 
-require 'ffmprb/defaults'
+require 'defaults'
