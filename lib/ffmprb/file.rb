@@ -8,25 +8,25 @@ module Ffmprb
 
     class << self
 
-      def buffered_fifo(extname='.tmp')
+      def threaded_buffered_fifo(extname='.tmp')
         input_fifo_file = temp_fifo(extname)
         output_fifo_file = temp_fifo(extname)
-
         Ffmprb.logger.debug "Opening #{input_fifo_file.path}>#{output_fifo_file.path} for buffering"
-        buff = Util::IoBuffer.new(async_opener(input_fifo_file, 'r'), async_opener(output_fifo_file, 'w'))
-
-        # NOTE the blocking cleanup thread to join for synchronisation
-        thr = Util::Thread.new do
-          buff.flush!
-          Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} ended"
-          input_fifo_file.remove
-          output_fifo_file.remove
+        Util::Thread.new do
+          begin
+            Util::ThreadedIoBuffer.new async_opener(input_fifo_file, 'r'), async_opener(output_fifo_file, 'w')
+            Util::Thread.join_children!
+            Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} ended"
+          ensure
+            input_fifo_file.remove  if input_fifo_file
+            output_fifo_file.remove  if output_fifo_file
+          end
         end
         Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} started"
 
-        # XXX see io_buffer's XXX yield buff  if block_given?
+        # XXX see threaded_io_buffer's XXX yield buff  if block_given?
 
-        OpenStruct.new in: input_fifo_file, out: output_fifo_file, thr: thr
+        [input_fifo_file, output_fifo_file]
       end
 
       def create(path)
@@ -78,6 +78,7 @@ module Ffmprb
 
       protected
 
+      # NOTE must be timeout-safe
       def async_opener(file, mode)
         ->{
           Ffmprb.logger.debug "Trying to open #{file.path} for #{mode}-buffering"
@@ -93,7 +94,7 @@ module Ffmprb
       @path.close  if @path && @path.respond_to?(:close)  # NOTE specially for temp files
       path!  # NOTE early (exception) raiser
       @mode = mode.to_sym
-      raise Error, "Open for read, create for write, ??? for #{@mode}"  unless %i[read write].include?(@mode)
+      fail Error, "Open for read, create for write, ??? for #{@mode}"  unless %i[read write].include?(@mode)
     end
 
     def path
@@ -139,47 +140,6 @@ module Ffmprb
     end
 
 
-    def sample(
-      at: 0.01,
-      video: true,
-      audio: true,
-      &blk
-    )
-      audio = File.temp('.mp3')  if audio == true
-      video = File.temp('.jpg')  if video == true
-
-      Ffmprb.logger.debug "Snap shooting files, video path: #{video ? video.path : 'NONE'}, audio path: #{audio ? audio.path : 'NONE'}"
-
-      raise Error, "Incorrect output extname (must be .jpg)"  unless !video || video.channel?(:video) && !video.channel?(:audio)
-      raise Error, "Incorrect audio extname (must be .mp3)"  unless !audio || audio.channel?(:audio) && !audio.channel?(:video)
-      raise Error, "Can sample either video OR audio UNLESS a block is given"  unless block_given? || !!audio != !!video
-
-      cmd = ['-i', path]
-      cmd += ['-deinterlace', '-an', '-ss', at, '-r', 1, '-vcodec', 'mjpeg', '-f', 'mjpeg', video.path]  if video
-      cmd += ['-vn', '-ss', at, '-t', 1, audio.path]  if audio
-      Util.ffmpeg *cmd
-
-      return video || audio  unless block_given?
-
-      begin
-        yield *[video || nil, audio || nil].compact
-      ensure
-        begin
-          video.remove  if video
-          audio.remove  if audio
-          Ffmprb.logger.debug "Removed sample files"
-        rescue
-          Ffmprb.logger.warn "Error removing sample files: #{$!.message}"
-        end
-      end
-    end
-    def sample_video(*video, at: 0.01, &blk)
-      sample at: at, video: (video.first || true), audio: false, &blk
-    end
-    def sample_audio(*audio, at: 0.01, &blk)
-      sample at: at, video: false, audio: (audio.first || true), &blk
-    end
-
     # Manipulation
 
     def read
@@ -202,7 +162,7 @@ module Ffmprb
         @path.respond_to?(:path)? @path.path : @path
       ).tap do |path|
         # XXX ensure readabilty/writability/readiness
-        raise Error, "'#{path}' is un#{@mode.to_s[0..3]}able"  unless path && !path.empty?
+        fail Error, "'#{path}' is un#{@mode.to_s[0..3]}able"  unless path && !path.empty?
       end
     end
 
@@ -211,12 +171,12 @@ module Ffmprb
       cmd = ['-v', 'quiet', '-i', path, '-print_format', 'json', '-show_format', '-show_streams']
       cmd << '-show_frames'  if harder
       @probe = JSON.parse(Util::ffprobe *cmd).tap do |probe|
-        raise Error, "This doesn't look like a ffprobable file"  unless probe['streams']
+        fail Error, "This doesn't look like a ffprobable file"  unless probe['streams']
       end
     end
 
     def image_extname?
-      extname =~ /^\.(jpe?g|y4m)$/i
+      extname =~ /^\.(jpe?g|png|y4m)$/i
     end
 
     def sound_extname?
@@ -230,3 +190,5 @@ module Ffmprb
   end
 
 end
+
+require 'ffmprb/file/sample'

@@ -16,7 +16,7 @@ module Ffmprb
           if silence.empty?
             silence << OpenStruct.new(start_at: 0.0, end_at: time)
           else
-            raise Error, "ffmpeg is being stupid: silence_end with no silence_start"  if silence.last.end_at
+            fail Error, "ffmpeg is being stupid: silence_end with no silence_start"  if silence.last.end_at
             silence.last.end_at = time
           end
         else

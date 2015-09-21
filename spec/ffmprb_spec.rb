@@ -443,9 +443,9 @@ describe Ffmprb do
       end
 
       it "should duck the overlay sound wrt the main sound" do
-        Ffmprb::Util::IoBuffer.block_size.tap do |block_size|
+        Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |block_size|
           begin
-            Ffmprb::Util::IoBuffer.block_size = 8*1024
+            Ffmprb::Util::ThreadedIoBuffer.block_size = 8*1024
 
             # NOTE non-streaming output file requires additional development see #181845
             Ffmprb.process(@av_file_wtb, @a_file, @av_out_stream) do |input1, input2, output1|
@@ -469,15 +469,15 @@ describe Ffmprb do
               expect(wave_data(sound).frequency).to be_within(10).of 666
             end
           ensure
-            Ffmprb::Util::IoBuffer.block_size = block_size
+            Ffmprb::Util::ThreadedIoBuffer.block_size = block_size
           end
         end
       end
 
       it "should duck some overlay sound wrt some main sound" do
-        Ffmprb::Util::IoBuffer.block_size.tap do |block_size|
+        Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |block_size|
           begin
-            Ffmprb::Util::IoBuffer.block_size = 8*1024
+            Ffmprb::Util::ThreadedIoBuffer.block_size = 8*1024
 
             # NOTE non-streaming output file requires additional development see #181845
             Ffmprb.process(@a_file, @a_out_file) do |input1, output1|
@@ -495,7 +495,7 @@ describe Ffmprb do
             expect(wave_data(@a_out_file.sample_audio at: 2).frequency).to be_within(10).of 666
             expect(wave_data(@a_out_file.sample_audio at: 6).frequency).to be_within(10).of 666
           ensure
-            Ffmprb::Util::IoBuffer.block_size = block_size
+            Ffmprb::Util::ThreadedIoBuffer.block_size = block_size
           end
         end
       end

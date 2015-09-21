@@ -7,34 +7,33 @@ describe Ffmprb::File do
   context "buffered fifos" do
 
     around do |example|
-      Ffmprb::Util::IoBuffer.block_size.tap do |default|
+      Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |default|
         begin
-          Ffmprb::Util::IoBuffer.block_size = 1024
+          Ffmprb::Util::ThreadedIoBuffer.block_size = 1024
           example.run
         ensure
-          Ffmprb::Util::IoBuffer.block_size = default
+          Ffmprb::Util::ThreadedIoBuffer.block_size = default
         end
       end
     end
 
     around do |example|
-      begin
-        @fifo = Ffmprb::File.buffered_fifo '.ext'
+      Ffmprb::Util::Thread.new "test" do
+        @fifo = Ffmprb::File.threaded_buffered_fifo '.ext'
         example.run
-      ensure
-        @fifo.thr.join  if @fifo
-      end
+        Ffmprb::Util::Thread.join_children!
+      end.join
     end
 
     it "should have the destination readable (while writing to)" do
 
       # piggy-backing another test
-      expect(@fifo.in.extname).to eq '.ext'
-      expect(@fifo.out.extname).to eq '.ext'
+      expect(@fifo[0].extname).to eq '.ext'
+      expect(@fifo[1].extname).to eq '.ext'
 
-      Timeout::timeout(4) do
-        file_out = File.open(@fifo.in.path, 'w')
-        file_in = File.open(@fifo.out.path, 'r')
+      Timeout.timeout(4) do
+        file_out = File.open(@fifo[0].path, 'w')
+        file_in = File.open(@fifo[1].path, 'r')
 
         writer = Thread.new do
           512.times do
@@ -57,13 +56,13 @@ describe Ffmprb::File do
     end
 
     it "should not timeout if the reader is a bit slow" do
-      Ffmprb::Util::IoBuffer.timeout.tap do |timeout|
+      Ffmprb::Util::ThreadedIoBuffer.timeout.tap do |timeout|
         begin
-          Ffmprb::Util::IoBuffer.timeout = 2
+          Ffmprb::Util::ThreadedIoBuffer.timeout = 2
 
-          File.open(@fifo.in.path, 'w') do |file_out|
-            File.open(@fifo.out.path, 'r') do |file_in|
-              Timeout::timeout(5) do
+          File.open(@fifo[0].path, 'w') do |file_out|
+            File.open(@fifo[1].path, 'r') do |file_in|
+              Timeout.timeout(5) do
                 thr = Thread.new do
                   file_out.write(TST_STR_6K * 512)
                   file_out.close
@@ -71,42 +70,41 @@ describe Ffmprb::File do
                 sleep 1
                 expect(file_in.read(TST_STR_6K.length * 512 + 1)).to eq TST_STR_6K * 512
                 thr.join
-                @fifo.thr.join
+                Ffmprb::Util::Thread.join_children!
               end
             end
           end
         ensure
-          Ffmprb::Util::IoBuffer.timeout = timeout
+          Ffmprb::Util::ThreadedIoBuffer.timeout = timeout
         end
       end
     end
 
     it "should timeout if the reader is very slow" do
-      Ffmprb::Util::IoBuffer.timeout.tap do |timeout|
+      Ffmprb::Util::ThreadedIoBuffer.timeout.tap do |timeout|
         begin
-          Ffmprb::Util::IoBuffer.timeout = 1
+          Ffmprb::Util::ThreadedIoBuffer.timeout = 1
 
-          File.open(@fifo.in.path, 'w') do |file_out|
-            File.open(@fifo.out.path, 'r') do |file_in|
-              Timeout::timeout(2) do
+          File.open(@fifo[0].path, 'w') do |file_out|
+            File.open(@fifo[1].path, 'r') do |file_in|
+              Timeout.timeout(2) do
                 expect{
                   file_out.write(TST_STR_6K * 1024)
                 }.to raise_error Errno::EPIPE
               end
             end
           end
-          expect{@fifo.thr.join}.to raise_error StandardError
-          @fifo = nil
+          expect{Ffmprb::Util::Thread.join_children!}.to raise_error StandardError
         ensure
-          Ffmprb::Util::IoBuffer.timeout = timeout
+          Ffmprb::Util::ThreadedIoBuffer.timeout = timeout
         end
       end
     end
 
     it "should be writable (before the destination is ever read), up to the buffer size(1024*1024)" do
-      Timeout::timeout(2) do
-        file_out = File.open(@fifo.in.path, 'w')
-        file_in = File.open(@fifo.out.path, 'r')
+      Timeout.timeout(2) do
+        file_out = File.open(@fifo[0].path, 'w')
+        file_in = File.open(@fifo[1].path, 'r')
         file_out.write(TST_STR_6K * 64)
         file_out.close
         expect(file_in.read(TST_STR_6K.length * 64 + 1)).to eq TST_STR_6K * 64

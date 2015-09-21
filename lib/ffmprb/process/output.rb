@@ -204,27 +204,24 @@ module Ffmprb
             end
             Ffmprb.logger.debug "Re-routed the main audio output (#{main_a_inter_o.path}->...->#{main_a_o.path}) through the process of audio ducking"
 
-            overlay_io = File.buffered_fifo(Process.intermediate_channel_extname :audio)
-            process.threaded overlay_io.thr
+            overlay_i, overlay_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname :audio)
             lbl_over = "ol#{i}"
             filters +=
               over_reel.reel.filters_for(lbl_over, process: process, video: false, audio: true)
-            channel_lbl_ios["#{lbl_over}:a"] = overlay_io.in
-            Ffmprb.logger.debug "Routed and buffering an auxiliary output fifos (#{overlay_io.in.path}>#{overlay_io.out.path}) for overlay"
+            channel_lbl_ios["#{lbl_over}:a"] = overlay_i
+            Ffmprb.logger.debug "Routed and buffering an auxiliary output fifos (#{overlay_i.path}>#{overlay_o.path}) for overlay"
 
-            inter_io = File.buffered_fifo(main_a_inter_o.extname)
-            process.threaded inter_io.thr
-            Ffmprb.logger.debug "Allocated fifos to buffer media (#{inter_io.in.path}>#{inter_io.out.path}) while finding silence"
+            inter_i, inter_o = File.threaded_buffered_fifo(main_a_inter_o.extname)
+            Ffmprb.logger.debug "Allocated fifos to buffer media (#{inter_i.path}>#{inter_o.path}) while finding silence"
 
-            thr = Util::Thread.new "audio ducking" do
-              silence = Ffmprb.find_silence(main_a_inter_o, inter_io.in)
+            Util::Thread.new "audio ducking" do
+              silence = Ffmprb.find_silence(main_a_inter_o, inter_i)
 
               Ffmprb.logger.debug "Audio ducking with silence: [#{silence.map{|s| "#{s.start_at}-#{s.end_at}"}.join ', '}]"
 
-              Process.duck_audio inter_io.out, overlay_io.out, silence, main_a_o,
+              Process.duck_audio inter_o, overlay_o, silence, main_a_o,
                 video: (channel?(:video)? {resolution: target_resolution, fps: target_fps}: false)
             end
-            process.threaded thr
           end
 
         end

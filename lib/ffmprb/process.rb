@@ -10,6 +10,8 @@ module Ffmprb
       attr_accessor :duck_audio_hi, :duck_audio_lo
       attr_accessor :duck_audio_silent_min_sec, :duck_audio_transition_sec
 
+      attr_accessor :timeout
+
       def intermediate_channel_extname(*media)
         if media == [:video]
           '.y4m'
@@ -51,8 +53,11 @@ module Ffmprb
 
     end
 
-    def initialize(*args, &blk)
+    attr_reader :timeout
+
+    def initialize(*args, **opts, &blk)
       @inputs = []
+      @timeout = opts[:timeout] || self.class.timeout
     end
 
     def input(io, only: nil)
@@ -69,9 +74,15 @@ module Ffmprb
       end
     end
 
-    def run
-      Util.ffmpeg *command
-      @threaded.to_a.each &:join
+    # NOTE the one and the only entry-point processing function which spawns threads etc
+    def run(limit: nil)  # (async: false)
+      Util::Thread.new do # NOTE this is both for the future async: option and according to
+                          # the threading policy (a parent death will be noticed and handled by children)
+        # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
+        Util.ffmpeg(*command, limit: limit, timeout: timeout).tap do |res|  # XXX just to return something
+          Util::Thread.join_children! limit, timeout: timeout
+        end
+      end.join
     end
 
     def [](obj)
@@ -79,11 +90,6 @@ module Ffmprb
       when Input
         @inputs.find_index(obj)
       end
-    end
-
-    # TODO deserves a better solution
-    def threaded(thr)
-      (@threaded ||= []) << thr
     end
 
     private
