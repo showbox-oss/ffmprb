@@ -26,7 +26,7 @@ module Ffmprb
 
       def sh(*cmd, output: :stdout, log: :stderr, limit: nil, timeout: cmd_timeout)
         cmd = cmd.map &:to_s  unless cmd.size == 1
-        cmd_str = cmd.size != 1 ? cmd.map{|c| "'#{c}'"}.join(' ') : cmd.first
+        cmd_str = cmd.size != 1 ? cmd.map{|c| "\"#{c}\""}.join(' ') : cmd.first
         timeout = [timeout, limit].compact.min
         thr = Thread.new "`#{cmd_str}`" do
           Ffmprb.logger.info "Popening `#{cmd_str}`..."

@@ -11,15 +11,26 @@ module Ffmprb
       end
 
       def afade_in(duration=1, input=nil, output=nil)
-        inout "afade=in:d=#{duration}", input, output
+        inout "afade=in:d=#{duration}:curve=hsin", input, output
       end
 
       def afade_out(duration=1, input=nil, output=nil)
-        inout "afade=out:d=#{duration}", input, output
+        inout "afade=out:d=#{duration}:curve=hsin", input, output
       end
 
-      def amix_to_first(inputs, output=nil)
-        inout "amix=#{[*inputs].length}:duration=first", inputs, output
+      def amix_to_first_same_volume(inputs, output=nil)
+        filters = []
+        new_inputs = inputs.map do |input|
+          if input == inputs.first
+            input
+          else
+            "apd#{input}".tap do |lbl_aux|
+              filters.concat inout('apad', input, lbl_aux)
+            end
+          end
+        end
+        filters +
+          inout("amix=#{inputs.length}:duration=shortest:dropout_transition=0, volume=#{inputs.length}", new_inputs, output)
       end
 
       def anull(input=nil, output=nil)
@@ -38,10 +49,15 @@ module Ffmprb
         inout "atrim=#{[st, en].compact.join ':'}, asetpts=PTS-STARTPTS", input, output
       end
 
-      def black_source(duration, resolution=nil, fps=nil, output=nil)
-        filter = "color=black:d=#{duration}"
-        filter << ":s=#{resolution}"  if resolution
-        filter << ":r=#{fps}"  if fps
+      def blank_source(duration, resolution, fps, output=nil)
+        color_source '0x000000@0', duration, resolution, fps, output
+      end
+
+      def color_source(color, duration, resolution, fps, output=nil)
+        filter = "color=#{color}"
+        filter << ":d=#{duration}"
+        filter << ":s=#{resolution}"
+        filter << ":r=#{fps}"
         inout filter, nil, output
       end
 
@@ -76,30 +92,30 @@ module Ffmprb
       def crop_exps(crop)
         exps = []
 
-        if crop[:left] > 0
+        if crop[:left]
           exps << "x=in_w*#{crop[:left]}"
         end
 
-        if crop[:top] > 0
+        if crop[:top]
           exps << "y=in_h*#{crop[:top]}"
         end
 
-        if crop[:right] > 0 && crop[:left]
-          raise Error, "Must specify two of {left, right, width} at most"  if crop[:width]
+        if crop[:right] && crop[:left]
+          fail Error, "Must specify two of {left, right, width} at most"  if crop[:width]
           crop[:width] = 1 - crop[:right] - crop[:left]
-        elsif crop[:width] > 0
-          if !crop[:left] && crop[:right] > 0
+        elsif crop[:width]
+          if !crop[:left] && crop[:right]
             crop[:left] = 1 - crop[:width] - crop[:right]
             exps << "x=in_w*#{crop[:left]}"
           end
         end
         exps << "w=in_w*#{crop[:width]}"
 
-        if crop[:bottom] > 0 && crop[:top]
-          raise Error, "Must specify two of {top, bottom, height} at most"  if crop[:height]
+        if crop[:bottom] && crop[:top]
+          fail Error, "Must specify two of {top, bottom, height} at most"  if crop[:height]
           crop[:height] = 1 - crop[:bottom] - crop[:top]
-        elsif crop[:height] > 0
-          if !crop[:top] && crop[:bottom] > 0
+        elsif crop[:height]
+          if !crop[:top] && crop[:bottom]
             crop[:top] = 1 - crop[:height] - crop[:bottom]
             exps << "y=in_h*#{crop[:top]}"
           end
@@ -123,15 +139,20 @@ module Ffmprb
         inout "pad=#{width}:#{height}:(#{width}-iw*min(#{width}/iw\\,#{height}/ih))/2:(#{height}-ih*min(#{width}/iw\\,#{height}/ih))/2", input, output
       end
 
+      def setsar(ratio, input=nil, output=nil)
+        inout "setsar=#{ratio}", input, output
+      end
+
       def scale(width, height, input=nil, output=nil)
         inout "scale=iw*min(#{width}/iw\\,#{height}/ih):ih*min(#{width}/iw\\,#{height}/ih)", input, output
       end
 
-      def scale_pad_fps(width, height, fps, input=nil, output=nil)
+      def scale_pad_fps(width, height, _fps, input=nil, output=nil)
         inout [
           *scale(width, height),
           *pad(width, height),
-          *fps(fps)
+          *setsar(1),  # NOTE the scale & pad formulae damage SAR a little, unfortunately
+          *fps(_fps)
         ].join(', '), input, output
       end
 
@@ -151,7 +172,7 @@ module Ffmprb
 
       def transition_av(transition, resolution, fps, inputs, output=nil, video: true, audio: true)
         blend_duration = transition[:blend].to_f
-        raise "Unsupported (yet) transition, sorry."  unless
+        fail "Unsupported (yet) transition, sorry."  unless
           transition.size == 1 && blend_duration > 0
 
         aux_lbl = "rn#{inputs.object_id}"  # should be sufficiently random
@@ -168,7 +189,7 @@ module Ffmprb
           filters.concat [
             *afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
             *afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
-            *amix_to_first(["#{auxx_lbl}:a", "#{aux_lbl}:a"], "#{output}:a")
+            *amix_to_first_same_volume(["#{auxx_lbl}:a", "#{aux_lbl}:a"], "#{output}:a")
           ]  if audio
         end
       end
@@ -184,7 +205,7 @@ module Ffmprb
       def volume_exp(volume)
         return volume  unless volume.is_a?(Hash)
 
-        raise Error, "volume cannot be empty"  if volume.empty?
+        fail Error, "volume cannot be empty"  if volume.empty?
 
         prev_at = 0.0
         prev_vol = volume[prev_at] || 1.0
@@ -203,11 +224,8 @@ module Ffmprb
         exp
       end
 
-      def white_source(duration, resolution=nil, fps=nil, output=nil)
-        filter = "color=white:d=#{duration}"
-        filter << ":s=#{resolution}"  if resolution
-        filter << ":r=#{fps}"  if fps
-        inout filter, nil, output
+      def white_source(duration, resolution, fps, output=nil)
+        color_source '0xFFFFFF@1', duration, resolution, fps, output
       end
 
       def complex_options(*filters)
