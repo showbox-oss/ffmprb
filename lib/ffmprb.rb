@@ -1,11 +1,3 @@
-require 'ffmprb/execution'
-require 'ffmprb/file'
-require 'ffmprb/filter'
-require 'ffmprb/find_silence'
-require 'ffmprb/process'
-require 'ffmprb/util'
-require 'ffmprb/version'
-
 require 'logger'
 
 module Ffmprb
@@ -16,26 +8,13 @@ module Ffmprb
   HD_720p = '1280x720'
   HD_1080p = '1920x1080'
 
-  class Error < StandardError
-  end
-
-  Util.ffmpeg_cmd = ['ffmpeg']
-  Util.ffprobe_cmd = ['ffprobe']
-
-  Process.duck_audio_hi = 0.9
-  Process.duck_audio_lo = 0.1
-  Process.duck_audio_transition_sec = 1
-  Process.duck_audio_silent_min_sec = 3
-  Filter.silence_noise_max_db = -40
-
-  Util::IoBuffer.blocks_max = 1024
-  Util::IoBuffer.block_size = 64*1024
-  Util::IoBuffer.timeout = 9
+  class Error < StandardError; end
 
   class << self
 
     # NOTE the form with the block returns the result of #run
-    # NOTE the form without the block returns the process (before it is run)
+    # NOTE the form without the block returns the process (before it is run) - advanced use
+    # XXX is this clear enough? Do we really need the second form?
     def process(*args, &blk)
       logger.debug "Starting process with #{args} in #{blk.source_location}"
       process = Process.new
@@ -68,3 +47,7 @@ module Ffmprb
 end
 
 Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
+
+Dir["#{__FILE__.slice /(.*).rb$/, 1}/**/*.rb"].each{|f| require f}  # XXX require_sub  __FILE__  # or something
+
+require 'defaults'
