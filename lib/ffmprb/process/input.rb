@@ -13,14 +13,19 @@ module Ffmprb
           self.crop_ratios = crop
         end
 
-        def filters_for(lbl, process:, video: true, audio: true)
+        def filters_for(lbl, process:, output:, video: true, audio: true)
 
           # Cropping
 
           lbl_aux = "cp#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
+          lbl_tmp = "tmp#{lbl}"
+          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
             [
-              *((video && channel?(:video))? Filter.crop(crop_ratios, "#{lbl_aux}:v", "#{lbl}:v"): nil),
+              *((video && channel?(:video))? [
+                Filter.crop(crop_ratios, "#{lbl_aux}:v", "#{lbl_tmp}:v"),
+                # XXX this fixup is temporary, leads to resolution loss on crop etc...
+                Filter.scale_pad_fps(output.target_width, output.target_height, output.target_fps, "#{lbl_tmp}:v", "#{lbl}:v")
+              ]: nil),
               *((audio && channel?(:audio))? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): nil)
             ]
         end
@@ -37,9 +42,9 @@ module Ffmprb
               ratios
             end.tap do |ratios|  # NOTE validation
               next  unless ratios
-              raise "Allowed crop params are: #{CROP_PARAMS}"  unless ratios.respond_to?(:keys) && (ratios.keys - CROP_PARAMS).empty?
+              fail "Allowed crop params are: #{CROP_PARAMS}"  unless ratios.respond_to?(:keys) && (ratios.keys - CROP_PARAMS).empty?
               ratios.each do |key, value|
-                raise Error, "Crop #{key} must be between 0 and 1 (not '#{value}')"  unless (0...1).include? value
+                fail Error, "Crop #{key} must be between 0 and 1 (not '#{value}')"  unless (0...1).include? value
               end
             end
         end
@@ -54,24 +59,40 @@ module Ffmprb
           @io = unfiltered
           @from, @to = from, (to.to_f == 0 ? nil : to)
 
-          raise Error, "cut from: cannot be nil"  if from.nil?
+          fail Error, "cut from: must be"  unless from
+          fail Error, "cut from: must be less than to:"  unless !to || from < to
         end
 
-        def filters_for(lbl, process:, video: true, audio: true)
+        def filters_for(lbl, process:, output:, video: true, audio: true)
 
           # Trimming
 
           lbl_aux = "tm#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
-            if from == 0 && !to
+          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
+            if to
+              lbl_blk = "bl#{lbl}"
+              lbl_pad = "pd#{lbl}"
+              [
+                *((video && channel?(:video))?
+                  Filter.blank_source(to - from, output.target_resolution, output.target_fps, "#{lbl_blk}:v") +
+                  Filter.concat_v(["#{lbl_aux}:v", "#{lbl_blk}:v"], "#{lbl_pad}:v") +
+                  Filter.trim(from, to, "#{lbl_pad}:v", "#{lbl}:v")
+                  : nil),
+                *((audio && channel?(:audio))?
+                  Filter.silent_source(to - from, "#{lbl_blk}:a") +
+                  Filter.concat_a(["#{lbl_aux}:a", "#{lbl_blk}:a"], "#{lbl_pad}:a") +
+                  Filter.atrim(from, to, "#{lbl_pad}:a", "#{lbl}:a")
+                  : nil)
+              ]
+            elsif from == 0
               [
                 *((video && channel?(:video))? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): nil),
                 *((audio && channel?(:audio))? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): nil)
               ]
-            else
+            else  # !to
               [
-                *((video && channel?(:video))? Filter.trim(from, to, "#{lbl_aux}:v", "#{lbl}:v"): nil),
-                *((audio && channel?(:audio))? Filter.atrim(from, to, "#{lbl_aux}:a", "#{lbl}:a"): nil)
+                *((video && channel?(:video))? Filter.trim(from, nil, "#{lbl_aux}:v", "#{lbl}:v"): nil),
+                *((audio && channel?(:audio))? Filter.atrim(from, nil, "#{lbl_aux}:a", "#{lbl}:a"): nil)
               ]
             end
         end
@@ -86,15 +107,15 @@ module Ffmprb
           @io = unfiltered
           @volume = volume
 
-          raise Error, "volume cannot be nil"  if volume.nil?
+          fail Error, "volume cannot be nil"  if volume.nil?
         end
 
-        def filters_for(lbl, process:, video: true, audio: true)
+        def filters_for(lbl, process:, output:, video: true, audio: true)
 
           # Modulating volume
 
           lbl_aux = "ld#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
+          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
             [
               *((video && channel?(:video))? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): nil),
               *((audio && channel?(:audio))? Filter.volume(@volume, "#{lbl_aux}:a", "#{lbl}:a"): nil)
@@ -116,13 +137,13 @@ module Ffmprb
         ['-i', @io.path]
       end
 
-      def filters_for(lbl, process:, video: true, audio: true)
+      def filters_for(lbl, process:, output:, video: true, audio: true)
 
         # Channelling
 
         if @io.respond_to?(:filters_for)
           lbl_aux = "au#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
+          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
             [
               *((video && @io.channel?(:video))?
                 (channel?(:video)? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): Filter.nullsink("#{lbl_aux}:v")):
@@ -135,7 +156,8 @@ module Ffmprb
           in_lbl = process[self]
           raise Error, "Data corruption"  unless in_lbl
           [
-            *(video && @io.channel?(:video) && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
+            # XXX this fixup is temporary, leads to resolution loss on crop etc... *(video && @io.channel?(:video) && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
+            *(video && @io.channel?(:video) && channel?(:video)? Filter.scale_pad_fps(output.target_width, output.target_height, output.target_fps, "#{in_lbl}:v", "#{lbl}:v"): nil),
             *(audio && @io.channel?(:audio) && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
           ]
         end
@@ -155,6 +177,10 @@ module Ffmprb
 
       def cut(from: 0, to: nil)
         Cut.new self, from: from, to: to
+      end
+
+      def mute
+        Loud.new self, volume: 0
       end
 
       def volume(vol)
@@ -178,7 +204,7 @@ module Ffmprb
             Ffmprb.logger.warn "Input file does no exist (#{file.path}), will probably fail"  unless file.exist?
           end
         else
-          raise Error, "Cannot resolve input: #{io}"
+          fail Error, "Cannot resolve input: #{io}"
         end
       end
 

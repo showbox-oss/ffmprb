@@ -1,9 +1,12 @@
 require 'logger'
 
+# IMPORTANT NOTE ffmprb uses threads internally, however, it is not "thread-safe"
+
 module Ffmprb
 
   ENV_VAR_FALSE_REGEX = /^(0|no?|false)?$/i
 
+  CGA = '320x200'
   QVGA = '320x240'
   HD_720p = '1280x720'
   HD_1080p = '1920x1080'
