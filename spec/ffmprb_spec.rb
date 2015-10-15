@@ -303,7 +303,7 @@ describe Ffmprb do
     context "media" do
 
       let(:m_input) {{video: @v_file_6, audio: @a_file_g_16}}
-      let(:m_output_extname) {{video: '.y4m', audio: '.mp3'}}
+      let(:m_output_extname) {{video: '.y4m', audio: '.wav'}}
 
       [:video, :audio].each do |medium|
         [
@@ -362,9 +362,11 @@ describe Ffmprb do
                 when :video
                   check_greenish! pixel_data(sample, 100, 100)
                 when :audio
+                  expect{wave_data(m_output)}.not_to raise_error  # NOTE audio format compat. check
                   check_note! (i < 3 ? :C6 : :G6), wave_data(sample)
                 end
               end
+
 
               expect(m_output.length).to be_approximately 4
               expect{

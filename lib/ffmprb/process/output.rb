@@ -238,7 +238,7 @@ module Ffmprb
             channel_lbls.each do |channel_lbl|
               options << '-map' << "[#{channel_lbl}]"
               # XXX temporary patchwork
-              options << '-c:a' << 'libmp3lame'  if channel_lbl =~ /:a$/
+              options << '-c:a' << 'libmp3lame'  if channel_lbls.size > 1 && channel_lbl =~ /:a$/
             end
             options << io.path
           end
