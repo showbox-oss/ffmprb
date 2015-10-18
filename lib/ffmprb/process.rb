@@ -4,8 +4,10 @@ module Ffmprb
 
     class << self
 
-      attr_accessor :duck_audio_volume_hi, :duck_audio_volume_lo
-      attr_accessor :duck_audio_silent_min, :duck_audio_transition_length
+      attr_accessor :duck_audio_volume_hi, :duck_audio_volume_lo,
+        :duck_audio_silent_min
+      attr_accessor :duck_audio_transition_length,
+        :duck_audio_transition_in_start, :duck_audio_transition_out_start
 
       attr_accessor :timeout
 
@@ -23,7 +25,7 @@ module Ffmprb
 
       def duck_audio(av_main_i, a_overlay_i, silence, av_main_o,
         volume_lo: duck_audio_volume_lo, volume_hi: duck_audio_volume_hi,
-        silent_min: duck_audio_silent_min, transition_length: duck_audio_transition_length,
+        silent_min: duck_audio_silent_min,
         video: {resolution: Ffmprb::CGA, fps: 30}  # XXX temporary
         )
         Ffmprb.process(av_main_i, a_overlay_i, silence, av_main_o) do |main_input, overlay_input, duck_data, main_output|
@@ -37,14 +39,16 @@ module Ffmprb
             duck_data.each do |silent|
               next  if silent.end_at && silent.start_at && (silent.end_at - silent.start_at) < silent_min
 
+              transition_in_start = silent.start_at + Process.duck_audio_transition_in_start
               ducked_overlay_volume.merge!(
-                [silent.start_at - transition_length/2, 0.0].max => volume_lo,
-                (silent.start_at + transition_length/2) => volume_hi
+                [transition_in_start, 0.0].max => volume_lo,
+                (transition_in_start + Process.duck_audio_transition_length) => volume_hi
               )  if silent.start_at
 
+              transition_out_start = silent.end_at + Process.duck_audio_transition_out_start
               ducked_overlay_volume.merge!(
-                [silent.end_at - transition_length/2, 0.0].max => volume_hi,
-                (silent.end_at + transition_length/2) => volume_lo
+                [transition_out_start, 0.0].max => volume_hi,
+                (transition_out_start + Process.duck_audio_transition_length) => volume_lo
               )  if silent.end_at
             end
             overlay in_over.volume ducked_overlay_volume
