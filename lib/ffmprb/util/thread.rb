@@ -5,7 +5,7 @@ module Ffmprb
     # NOTE doesn't have specs (and not too proud about it)
     class Thread < ::Thread
 
-      class Error < StandardError; end
+      class Error < Ffmprb::Error; end
       class ParentError < Error; end
 
       class << self

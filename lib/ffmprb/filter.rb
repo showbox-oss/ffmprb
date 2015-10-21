@@ -2,6 +2,8 @@ module Ffmprb
 
   module Filter
 
+    class Error < Ffmprb::Error; end
+
     class << self
 
       attr_accessor :silence_noise_max_db
@@ -10,12 +12,12 @@ module Ffmprb
         inout "alphamerge", inputs, output
       end
 
-      def afade_in(duration=1, input=nil, output=nil)
-        inout "afade=in:d=#{duration}:curve=hsin", input, output
+      def afade_in(duration, input=nil, output=nil)
+        inout "afade=in:d=%{duration}:curve=hsin", input, output, duration: duration
       end
 
-      def afade_out(duration=1, input=nil, output=nil)
-        inout "afade=out:d=#{duration}:curve=hsin", input, output
+      def afade_out(duration, input=nil, output=nil)
+        inout "afade=out:d=%{duration}:curve=hsin", input, output, duration: duration
       end
 
       def amix_to_first_same_volume(inputs, output=nil)
@@ -25,12 +27,14 @@ module Ffmprb
             input
           else
             "apd#{input}".tap do |lbl_aux|
-              filters.concat inout('apad', input, lbl_aux)
+              filters +=
+                inout("apad", input, lbl_aux)  # NOTE we'll see if we really need this filter separate
             end
           end
         end
         filters +
-          inout("amix=#{inputs.length}:duration=shortest:dropout_transition=0, volume=#{inputs.length}", new_inputs, output)
+          inout("amix=%{inputs_count}:duration=shortest:dropout_transition=0, volume=%{inputs_count}",
+            new_inputs, output, inputs_count: (inputs.empty?? nil : inputs.size))
       end
 
       def anull(input=nil, output=nil)
@@ -45,8 +49,9 @@ module Ffmprb
         inout "asplit", inputs, outputs
       end
 
-      def atrim(st, en, input=nil, output=nil)
-        inout "atrim=#{[st, en].compact.join ':'}, asetpts=PTS-STARTPTS", input, output
+      def atrim(st, en=nil, input=nil, output=nil)
+        inout "atrim=%{start_end}, asetpts=PTS-STARTPTS", input, output,
+          start_end: [st, en].compact.join(':')
       end
 
       def blank_source(duration, resolution, fps, output=nil)
@@ -54,31 +59,31 @@ module Ffmprb
       end
 
       def color_source(color, duration, resolution, fps, output=nil)
-        filter = "color=#{color}"
-        filter << ":d=#{duration}"
-        filter << ":s=#{resolution}"
-        filter << ":r=#{fps}"
-        inout filter, nil, output
+        inout "color=%{color}:d=%{duration}:s=%{resolution}:r=%{fps}", nil, output,
+          color: color, duration: duration, resolution: resolution, fps: fps
       end
 
-      def fade_out_alpha(duration=1, input=nil, output=nil)
-        inout "fade=out:d=#{duration}:alpha=1", input, output
+      def fade_out_alpha(duration, input=nil, output=nil)
+        inout "fade=out:d=%{duration}:alpha=1", input, output, duration: duration
       end
 
       def fps(fps, input=nil, output=nil)
-        inout "fps=fps=#{fps}", input, output
+        inout "fps=fps=%{fps}", input, output, fps: fps
       end
 
       def concat_v(inputs, output=nil)
-        inout "concat=#{[*inputs].length}:v=1:a=0", inputs, output
+        inout "concat=%{inputs_count}:v=1:a=0", inputs, output,
+          inputs_count: (inputs.empty?? nil : inputs.size)
       end
 
       def concat_a(inputs, output=nil)
-        inout "concat=#{[*inputs].length}:v=0:a=1", inputs, output
+        inout "concat=%{inputs_count}:v=0:a=1", inputs, output,
+          inputs_count: (inputs.empty?? nil : inputs.size)
       end
 
       def concat_av(inputs, output=nil)
-        inout "concat=#{inputs.length/2}:v=1:a=1", inputs, output
+        inout "concat=%{inputs_count}:v=1:a=1", inputs, output,
+          inputs_count: (inputs.empty? || inputs.size % 2 != 0 ? nil : inputs.size/2)  # XXX meh
       end
 
       def copy(input=nil, output=nil)
@@ -86,7 +91,8 @@ module Ffmprb
       end
 
       def crop(crop, input=nil, output=nil)
-        inout "crop=#{crop_exps(crop).join ':'}", input, output
+        inout "crop=%{crop_exp}", input, output,
+          crop_exp: crop_exps(crop).join(':')
       end
 
       def crop_exps(crop)
@@ -132,19 +138,21 @@ module Ffmprb
       end
 
       def overlay(x=0, y=0, inputs=nil, output=nil)
-        inout "overlay=x=#{x}:y=#{y}:eof_action=pass", inputs, output
+        inout "overlay=x=%{x}:y=%{y}:eof_action=pass", inputs, output, x: x, y: y
       end
 
       def pad(width, height, input=nil, output=nil)
-        inout "pad=#{width}:#{height}:(#{width}-iw*min(#{width}/iw\\,#{height}/ih))/2:(#{height}-ih*min(#{width}/iw\\,#{height}/ih))/2", input, output
+        inout "pad=%{width}:%{height}:(%{width}-iw*min(%{width}/iw\\,%{height}/ih))/2:(%{height}-ih*min(%{width}/iw\\,%{height}/ih))/2",
+          input, output, width: width, height: height
       end
 
       def setsar(ratio, input=nil, output=nil)
-        inout "setsar=#{ratio}", input, output
+        inout "setsar=%{ratio}", input, output, ratio: ratio
       end
 
       def scale(width, height, input=nil, output=nil)
-        inout "scale=iw*min(#{width}/iw\\,#{height}/ih):ih*min(#{width}/iw\\,#{height}/ih)", input, output
+        inout "scale=iw*min(%{width}/iw\\,%{height}/ih):ih*min(%{width}/iw\\,%{height}/ih)",
+          input, output, width: width, height: height
       end
 
       def scale_pad_fps(width, height, _fps, input=nil, output=nil)
@@ -157,11 +165,12 @@ module Ffmprb
       end
 
       def silencedetect(input=nil, output=nil)
-        inout "silencedetect=d=1:n=#{silence_noise_max_db}dB", input, output
+        inout "silencedetect=d=1:n=%{silence_noise_max_db}dB", input, output,
+          silence_noise_max_db: silence_noise_max_db
       end
 
       def silent_source(duration, output=nil)
-        inout "aevalsrc=0:d=#{duration}", nil, output
+        inout "aevalsrc=0:d=%{duration}", nil, output, duration: duration
       end
 
       # XXX might be very useful with transitions: def smartblur
@@ -194,12 +203,14 @@ module Ffmprb
         end
       end
 
-      def trim(st, en, input=nil, output=nil)
-        inout "trim=#{[st, en].compact.join ':'}, setpts=PTS-STARTPTS", input, output
+      def trim(st, en=nil, input=nil, output=nil)
+        inout "trim=%{start_end}, setpts=PTS-STARTPTS", input, output,
+          start_end: [st, en].compact.join(':')
       end
 
       def volume(volume, input=nil, output=nil)
-        inout "volume='#{volume_exp volume}':eval=frame", input, output
+        inout "volume='%{volume_exp}':eval=frame", input, output,
+          volume_exp: volume_exp(volume)
       end
 
       def volume_exp(volume)
@@ -234,13 +245,14 @@ module Ffmprb
 
       private
 
-      def inout(filter, inputs, outputs)
-        [
-          filter.tap do |f|
-            f.prepend "#{[*inputs].map{|s| "[#{s}]"}.join ' '} "  if inputs
-            f << " #{[*outputs].map{|s| "[#{s}]"}.join ' '}"  if outputs
-          end
-        ]
+      def inout(filter, inputs, outputs, **values)
+        values.each do |key, value|
+          fail Error.new "#{filter} needs #{key}"  if value.to_s.empty?
+        end
+        filter = filter % values
+        filter = "#{[*inputs].map{|s| "[#{s}]"}.join ' '} " + filter  if inputs
+        filter = filter + " #{[*outputs].map{|s| "[#{s}]"}.join ' '}"  if outputs
+        [filter]
       end
 
     end
