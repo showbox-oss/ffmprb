@@ -4,23 +4,21 @@ module Ffmprb
 
     class Input
 
-      class Loud < Input
-
-        attr_reader :from, :to
+      class Loud < ChainBase
 
         def initialize(unfiltered, volume:)
-          @io = unfiltered
+          super unfiltered
           @volume = volume
 
           fail Error, "volume cannot be nil"  if volume.nil?
         end
 
-        def filters_for(lbl, process:, output:, video: true, audio: true)
+        def filters_for(lbl, process:, video:, audio:)
 
           # Modulating volume
 
           lbl_aux = "ld#{lbl}"
-          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
+          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
             [
               *((video && channel?(:video))? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): nil),
               *((audio && channel?(:audio))? Filter.volume(@volume, "#{lbl_aux}:a", "#{lbl}:a"): nil)

@@ -92,7 +92,7 @@ describe Ffmprb do
       Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
 
         in1 = input(file_input)
-        output(file_output, resolution: Ffmprb::HD_720p) do
+        output(file_output, video: {resolution: Ffmprb::HD_720p, fps: 30}) do
           roll in1
         end
 
@@ -306,10 +306,11 @@ describe Ffmprb do
       let(:m_output_extname) {{video: '.y4m', audio: '.wav'}}
 
       [:video, :audio].each do |medium|
+        not_medium = ([:video, :audio] - [medium])[0]
         [
           lambda do |av_file_input, m_file_input, m_file_output|  ##1
             in1 = input(av_file_input)
-            output(m_file_output, only: medium) do
+            output(m_file_output, not_medium => false) do
               roll in1.cut(from: 3, to: 5)
               roll in1.cut(from: 3, to: 5)
             end
@@ -322,7 +323,7 @@ describe Ffmprb do
             end
           end,
           lambda do |av_file_input, m_file_input, m_file_output|  ##3
-            in1 = input(av_file_input, only: medium)
+            in1 = input(av_file_input)
             output(m_file_output) do
               roll in1.cut(from: 3, to: 5)
               roll in1.cut(from: 3, to: 5)
@@ -330,7 +331,7 @@ describe Ffmprb do
           end,
           lambda do |av_file_input, m_file_input, m_file_output|  ##4
             in1 = input(m_file_input)
-            output(m_file_output, only: medium) do
+            output(m_file_output, not_medium => false) do
               roll in1.cut(from: 3, to: 5)
               roll in1.cut(from: 3, to: 5)
             end
@@ -343,7 +344,7 @@ describe Ffmprb do
             end
           end,
           lambda do |av_file_input, m_file_input, m_file_output|  ##6
-            in1 = input(m_file_input, only: medium)
+            in1 = input(m_file_input)
             output(m_file_output) do
               roll in1.cut(from: 3, to: 5)
               roll in1.cut(from: 3, to: 5)
@@ -521,7 +522,7 @@ describe Ffmprb do
               in2 = input(input2)
               output(output1) do
                 lay in1.cut(to: 10), transition: {blend: 1}
-                overlay in2.cut(from: 4), duck: :audio, transition: {blend: 1}
+                overlay in2.cut(from: 4), duck: :audio
               end
 
             end

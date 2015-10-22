@@ -4,27 +4,27 @@ module Ffmprb
 
     class Input
 
-      class Cropped < Input
+      class Cropped < ChainBase
 
         attr_reader :crop_ratios
 
         def initialize(unfiltered, crop:)
-          @io = unfiltered
+          super unfiltered
           self.crop_ratios = crop
         end
 
-        def filters_for(lbl, process:, output:, video: true, audio: true)
+        def filters_for(lbl, process:, video:, audio:)
 
           # Cropping
 
           lbl_aux = "cp#{lbl}"
           lbl_tmp = "tmp#{lbl}"
-          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
+          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
             [
               *((video && channel?(:video))? [
                 Filter.crop(crop_ratios, "#{lbl_aux}:v", "#{lbl_tmp}:v"),
                 # XXX this fixup is temporary, leads to resolution loss on crop etc...
-                Filter.scale_pad_fps(output.target_width, output.target_height, output.target_fps, "#{lbl_tmp}:v", "#{lbl}:v")
+                Filter.scale_pad_fps(video.resolution, video.fps, "#{lbl_tmp}:v", "#{lbl}:v")
               ]: nil),
               *((audio && channel?(:audio))? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): nil)
             ]

@@ -4,25 +4,21 @@ module Ffmprb
 
     class Input
 
-      def initialize(io, only: nil)
+      def initialize(io)
         @io = resolve(io)
-        @channels = [*only]
-        @channels = nil  if @channels.empty?
-        raise Error, "Inadequate A/V channels"  if
-          [:video, :audio].any?{|medium| !@io.channel?(medium) && channel?(medium, true)}
       end
 
       def options
         ['-i', @io.path]
       end
 
-      def filters_for(lbl, process:, output:, video: true, audio: true)
+      def filters_for(lbl, process:, video:, audio:)
 
         # Channelling
 
         if @io.respond_to?(:filters_for)
           lbl_aux = "au#{lbl}"
-          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
+          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
             [
               *((video && @io.channel?(:video))?
                 (channel?(:video)? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): Filter.nullsink("#{lbl_aux}:v")):
@@ -36,18 +32,18 @@ module Ffmprb
           raise Error, "Data corruption"  unless in_lbl
           [
             # XXX this fixup is temporary, leads to resolution loss on crop etc... *(video && @io.channel?(:video) && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
-            *(video && @io.channel?(:video) && channel?(:video)? Filter.scale_pad_fps(output.target_width, output.target_height, output.target_fps, "#{in_lbl}:v", "#{lbl}:v"): nil),
+            *(video && @io.channel?(:video) && channel?(:video)? Filter.scale_pad_fps(video.resolution, video.fps, "#{in_lbl}:v", "#{lbl}:v"): nil),
             *(audio && @io.channel?(:audio) && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
           ]
         end
       end
 
       def video
-        Input.new self, only: :video
+        Channeled.new self, audio: false
       end
 
       def audio
-        Input.new self, only: :audio
+        Channeled.new self, video: false
       end
 
       def crop(ratio)  # NOTE ratio is either a CROP_PARAMS symbol-ratio hash or a single (global) ratio
@@ -66,10 +62,8 @@ module Ffmprb
         Loud.new self, volume: vol
       end
 
-      def channel?(medium, force=false)
-        return !!@channels && @channels.include?(medium) && @io.channel?(medium)  if force
-
-        (!@channels || @channels.include?(medium)) && @io.channel?(medium)
+      def channel?(medium)
+        @io.channel? medium
       end
 
       protected

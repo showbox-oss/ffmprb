@@ -141,7 +141,8 @@ module Ffmprb
         inout "overlay=x=%{x}:y=%{y}:eof_action=pass", inputs, output, x: x, y: y
       end
 
-      def pad(width, height, input=nil, output=nil)
+      def pad(resolution, input=nil, output=nil)
+        width, height = resolution.to_s.split('x')
         inout "pad=%{width}:%{height}:(%{width}-iw*min(%{width}/iw\\,%{height}/ih))/2:(%{height}-ih*min(%{width}/iw\\,%{height}/ih))/2",
           input, output, width: width, height: height
       end
@@ -150,15 +151,16 @@ module Ffmprb
         inout "setsar=%{ratio}", input, output, ratio: ratio
       end
 
-      def scale(width, height, input=nil, output=nil)
+      def scale(resolution, input=nil, output=nil)
+        width, height = resolution.to_s.split('x')
         inout "scale=iw*min(%{width}/iw\\,%{height}/ih):ih*min(%{width}/iw\\,%{height}/ih)",
           input, output, width: width, height: height
       end
 
-      def scale_pad_fps(width, height, _fps, input=nil, output=nil)
+      def scale_pad_fps(resolution, _fps, input=nil, output=nil)
         inout [
-          *scale(width, height),
-          *pad(width, height),
+          *scale(resolution),
+          *pad(resolution),
           *setsar(1),  # NOTE the scale & pad formulae damage SAR a little, unfortunately
           *fps(_fps)
         ].join(', '), input, output
@@ -179,28 +181,31 @@ module Ffmprb
         inout "split", inputs, outputs
       end
 
-      def transition_av(transition, resolution, fps, inputs, output=nil, video: true, audio: true)
-        blend_duration = transition[:blend].to_f
-        fail "Unsupported (yet) transition, sorry."  unless
-          transition.size == 1 && blend_duration > 0
+      def blend_v(duration, resolution, fps, inputs, output=nil)
+        fail Error, "must be given 2 inputs"  unless inputs.size == 2
 
-        aux_lbl = "rn#{inputs.object_id}"  # should be sufficiently random
-        auxx_lbl = "x#{aux_lbl}"
-        [].tap do |filters|
-          filters.concat [
-            *white_source(blend_duration, resolution, fps, "#{aux_lbl}:v"),
-            *inout([
-              *alphamerge(["#{inputs.first}:v", "#{aux_lbl}:v"]),
-              *fade_out_alpha(blend_duration)
-            ].join(', '), nil, "#{auxx_lbl}:v"),
-            *overlay(0, 0, ["#{inputs.last}:v", "#{auxx_lbl}:v"], "#{output}:v"),
-          ]  if video
-          filters.concat [
-            *afade_out(blend_duration, "#{inputs.first}:a", "#{aux_lbl}:a"),
-            *afade_in(blend_duration, "#{inputs.last}:a", "#{auxx_lbl}:a"),
-            *amix_to_first_same_volume(["#{auxx_lbl}:a", "#{aux_lbl}:a"], "#{output}:a")
-          ]  if audio
-        end
+        aux_lbl = "rn#{inputs.object_id}:v"  # should be sufficiently random
+        auxx_lbl = "x#{aux_lbl}:v"
+        [
+          *white_source(duration, resolution, fps, aux_lbl),
+          *inout([
+            *alphamerge([inputs[0], aux_lbl]),
+            *fade_out_alpha(duration)
+          ].join(', '), nil, auxx_lbl),
+          *overlay(0, 0, [inputs[1], auxx_lbl], output),
+        ]
+      end
+
+      def blend_a(duration, inputs, output=nil)
+        fail Error, "must be given 2 inputs"  unless inputs.size == 2
+
+        aux_lbl = "rn#{inputs.object_id}:a"  # should be sufficiently random
+        auxx_lbl = "x#{aux_lbl}:a"
+        [
+          *afade_out(duration, inputs[0], aux_lbl),
+          *afade_in(duration, inputs[1], auxx_lbl),
+          *amix_to_first_same_volume([auxx_lbl, aux_lbl], output)
+        ]
       end
 
       def trim(st, en=nil, input=nil, output=nil)
@@ -247,7 +252,7 @@ module Ffmprb
 
       def inout(filter, inputs, outputs, **values)
         values.each do |key, value|
-          fail Error.new "#{filter} needs #{key}"  if value.to_s.empty?
+          fail Error, "#{filter} needs #{key}"  if value.to_s.empty?
         end
         filter = filter % values
         filter = "#{[*inputs].map{|s| "[#{s}]"}.join ' '} " + filter  if inputs

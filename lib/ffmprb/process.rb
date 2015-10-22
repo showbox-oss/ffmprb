@@ -30,9 +30,9 @@ module Ffmprb
         )
         Ffmprb.process(av_main_i, a_overlay_i, silence, av_main_o) do |main_input, overlay_input, duck_data, main_output|
 
-          in_main = input(main_input, **(video ? {} : {only: :audio}))
-          in_over = input(overlay_input, only: :audio)
-          output(main_output, **(video ? {resolution: video[:resolution], fps: video[:fps]} : {})) do
+          in_main = input(main_input)
+          in_over = input(overlay_input)
+          output(main_output, video: video) do
             roll in_main
 
             ducked_overlay_volume = {0.0 => volume_lo}
@@ -51,7 +51,7 @@ module Ffmprb
                 (transition_out_start + Process.duck_audio_transition_length) => volume_lo
               )  if silent.end_at
             end
-            overlay in_over.volume ducked_overlay_volume
+            overlay in_over.audio.volume ducked_overlay_volume
 
             Ffmprb.logger.debug "Ducking audio with volumes: {#{ducked_overlay_volume.map{|t,v| "#{t}: #{v}"}.join ', '}}"
           end
@@ -68,16 +68,16 @@ module Ffmprb
       @timeout = opts[:timeout] || self.class.timeout
     end
 
-    def input(io, only: nil)
-      Input.new(io, only: only).tap do |inp|
+    def input(io)
+      Input.new(io).tap do |inp|
         @inputs << inp
       end
     end
 
-    def output(io, only: nil, resolution: Ffmprb::CGA, fps: 30, &blk)
+    def output(io, video: {resolution: Ffmprb::CGA, fps: 18}, audio: {}, &blk)
       fail Error, "Just one output for now, sorry."  if @output
 
-      @output = Output.new(io, only: only, resolution: resolution, fps: fps).tap do |out|
+      @output = Output.new(io, video: video, audio: audio).tap do |out|
         out.instance_exec &blk
       end
     end

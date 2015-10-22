@@ -9,25 +9,26 @@ module Ffmprb
         attr_reader :from, :to
 
         def initialize(unfiltered, from:, to:)
-          @io = unfiltered
-          @from, @to = from, (to.to_f == 0 ? nil : to)
+          super unfiltered
+          @from = from
+          @to = to.to_f == 0 ? nil : to
 
           fail Error, "cut from: must be"  unless from
           fail Error, "cut from: must be less than to:"  unless !to || from < to
         end
 
-        def filters_for(lbl, process:, output:, video: true, audio: true)
+        def filters_for(lbl, process:, video:, audio:)
 
           # Trimming
 
           lbl_aux = "tm#{lbl}"
-          @io.filters_for(lbl_aux, process: process, output: output, video: video, audio: audio) +
+          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
             if to
               lbl_blk = "bl#{lbl}"
               lbl_pad = "pd#{lbl}"
               [
                 *((video && channel?(:video))?
-                  Filter.blank_source(to - from, output.target_resolution, output.target_fps, "#{lbl_blk}:v") +
+                  Filter.blank_source(to - from, video.resolution, video.fps, "#{lbl_blk}:v") +
                   Filter.concat_v(["#{lbl_aux}:v", "#{lbl_blk}:v"], "#{lbl_pad}:v") +
                   Filter.trim(from, to, "#{lbl_pad}:v", "#{lbl}:v")
                   : nil),

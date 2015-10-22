@@ -13,7 +13,7 @@ av_final = Ffmprb::File.create('cine.flv')
 Ffmprb.process(av_raw, a_track, av_final) do |av_input1, a_input1, av_output1|
 
   in_main = input(av_input1)
-  in_sound = input(a_input1, only: :audio)
+  in_sound = input(a_input1)
   output(av_output1, resolution: Ffmprb::HD_720p) do
     roll in_main.cut(from: 2, to: 5).crop(0.25), transition: {blend: 1}
     roll in_main.cut(from: 6).volume(2), after: 2, transition: {blend: 1}
