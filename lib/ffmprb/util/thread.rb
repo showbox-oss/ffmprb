@@ -70,7 +70,7 @@ module Ffmprb
         sync_q.deq
       end
 
-      # XXX protected: none of these methods should be called by a user code, the only public methods are above
+      # TODO protected: none of these methods should be called by a user code, the only public methods are above
 
       def live!
         fail ParentError  if @parent.status.nil?

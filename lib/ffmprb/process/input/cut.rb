@@ -4,7 +4,7 @@ module Ffmprb
 
     class Input
 
-      class Cut < Input
+      class Cut < ChainBase
 
         attr_reader :from, :to
 
@@ -17,12 +17,14 @@ module Ffmprb
           fail Error, "cut from: must be less than to:"  unless !to || from < to
         end
 
-        def filters_for(lbl, process:, video:, audio:)
+        def filters_for(lbl, video:, audio:)
+          fail Error, "cut needs resolution and fps (reorder your filters?)"  unless
+            !video || video.resolution && video.fps
 
           # Trimming
 
           lbl_aux = "tm#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
+          unfiltered.filters_for(lbl_aux, video: video, audio: audio) +
             if to
               lbl_blk = "bl#{lbl}"
               lbl_pad = "pd#{lbl}"

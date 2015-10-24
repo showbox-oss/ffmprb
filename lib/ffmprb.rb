@@ -51,6 +51,6 @@ end
 
 Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
 
-Dir["#{__FILE__.slice /(.*).rb$/, 1}/**/*.rb"].each{|f| require f}  # XXX require_sub  __FILE__  # or something
+Dir["#{__FILE__.slice /(.*).rb$/, 1}/**/*.rb"].each{|f| require f}
 
 require 'defaults'

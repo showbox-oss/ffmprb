@@ -90,12 +90,17 @@ module Ffmprb
         inout "copy", input, output
       end
 
+      # TODO unused at the moment
       def crop(crop, input=nil, output=nil)
-        inout "crop=%{crop_exp}", input, output,
-          crop_exp: crop_exps(crop).join(':')
+        inout "crop=x=%{left}:y=%{top}:w=%{width}:h=%{height}", input, output, crop
       end
 
-      def crop_exps(crop)
+      def crop_prop(crop, input=nil, output=nil)
+        inout "crop=%{crop_exp}", input, output,
+          crop_exp: crop_prop_exps(crop).join(':')
+      end
+
+      def crop_prop_exps(crop)
         exps = []
 
         if crop[:left]
@@ -131,7 +136,7 @@ module Ffmprb
         exps
       end
 
-      # XXX might be very useful with UGC: def cropdetect
+      # NOTE might be very useful with UGC: def cropdetect
 
       def nullsink(input=nil)
         inout "nullsink", input, nil
@@ -143,8 +148,11 @@ module Ffmprb
 
       def pad(resolution, input=nil, output=nil)
         width, height = resolution.to_s.split('x')
-        inout "pad=%{width}:%{height}:(%{width}-iw*min(%{width}/iw\\,%{height}/ih))/2:(%{height}-ih*min(%{width}/iw\\,%{height}/ih))/2",
-          input, output, width: width, height: height
+        inout [
+          inout("pad=%{width}:%{height}:(%{width}-iw*min(%{width}/iw\\,%{height}/ih))/2:(%{height}-ih*min(%{width}/iw\\,%{height}/ih))/2",
+            width: width, height: height),
+          *setsar(1)  # NOTE the scale & pad formulae damage SAR a little, unfortunately
+        ].join(', '), input, output
       end
 
       def setsar(ratio, input=nil, output=nil)
@@ -153,15 +161,22 @@ module Ffmprb
 
       def scale(resolution, input=nil, output=nil)
         width, height = resolution.to_s.split('x')
-        inout "scale=iw*min(%{width}/iw\\,%{height}/ih):ih*min(%{width}/iw\\,%{height}/ih)",
-          input, output, width: width, height: height
+        inout [
+          inout("scale=iw*min(%{width}/iw\\,%{height}/ih):ih*min(%{width}/iw\\,%{height}/ih)", width: width, height: height),
+          *setsar(1)  # NOTE the scale & pad formulae damage SAR a little, unfortunately
+        ].join(', '), input, output
+      end
+
+      def scale_pad(resolution, input=nil, output=nil)
+        inout [
+          *scale(resolution),
+          *pad(resolution)
+        ].join(', '), input, output
       end
 
       def scale_pad_fps(resolution, _fps, input=nil, output=nil)
         inout [
-          *scale(resolution),
-          *pad(resolution),
-          *setsar(1),  # NOTE the scale & pad formulae damage SAR a little, unfortunately
+          *scale_pad(resolution),
           *fps(_fps)
         ].join(', '), input, output
       end
@@ -175,7 +190,7 @@ module Ffmprb
         inout "aevalsrc=0:d=%{duration}", nil, output, duration: duration
       end
 
-      # XXX might be very useful with transitions: def smartblur
+      # NOTE might be very useful with transitions: def smartblur
 
       def split(inputs=nil, outputs=nil)
         inout "split", inputs, outputs
@@ -250,7 +265,7 @@ module Ffmprb
 
       private
 
-      def inout(filter, inputs, outputs, **values)
+      def inout(filter, inputs=nil, outputs=nil, **values)
         values.each do |key, value|
           fail Error, "#{filter} needs #{key}"  if value.to_s.empty?
         end

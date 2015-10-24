@@ -6,25 +6,24 @@ module Ffmprb
 
       class Cropped < ChainBase
 
-        attr_reader :crop_ratios
+        attr_reader :ratios
 
         def initialize(unfiltered, crop:)
           super unfiltered
-          self.crop_ratios = crop
+          self.ratios = crop
         end
 
-        def filters_for(lbl, process:, video:, audio:)
+        def filters_for(lbl, video:, audio:)
 
           # Cropping
 
           lbl_aux = "cp#{lbl}"
           lbl_tmp = "tmp#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
+          unfiltered.filters_for(lbl_aux, video: unsize(video), audio: audio) +
             [
               *((video && channel?(:video))? [
-                Filter.crop(crop_ratios, "#{lbl_aux}:v", "#{lbl_tmp}:v"),
-                # XXX this fixup is temporary, leads to resolution loss on crop etc...
-                Filter.scale_pad_fps(video.resolution, video.fps, "#{lbl_tmp}:v", "#{lbl}:v")
+                Filter.crop_prop(ratios, "#{lbl_aux}:v", "#{lbl_tmp}:v"),
+                Filter.scale_pad(video.resolution, "#{lbl_tmp}:v", "#{lbl}:v")
               ]: nil),
               *((audio && channel?(:audio))? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): nil)
             ]
@@ -34,17 +33,26 @@ module Ffmprb
 
         CROP_PARAMS = %i[top left bottom right width height]
 
-        def crop_ratios=(ratios)
-          @crop_ratios =
+        def unsize(video)
+          fail Error, "requires resolution"  unless video.resolution
+          OpenStruct.new(video).tap do |video|
+            video.resolution = nil
+          end
+        end
+
+        def ratios=(ratios)
+          @ratios =
             if ratios.is_a?(Numeric)
               {top: ratios, left: ratios, bottom: ratios, right: ratios}
             else
               ratios
             end.tap do |ratios|  # NOTE validation
-              next  unless ratios
-              fail "Allowed crop params are: #{CROP_PARAMS}"  unless ratios.respond_to?(:keys) && (ratios.keys - CROP_PARAMS).empty?
+              fail "Allowed crop params are: #{CROP_PARAMS}"  unless
+                ratios && ratios.respond_to?(:keys) && (ratios.keys - CROP_PARAMS).empty?
+
               ratios.each do |key, value|
-                fail Error, "Crop #{key} must be between 0 and 1 (not '#{value}')"  unless (0...1).include? value
+                fail Error, "Crop #{key} must be between 0 and 1 (not '#{value}')"  unless
+                  (0...1).include? value
               end
             end
         end

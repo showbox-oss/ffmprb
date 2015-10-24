@@ -13,12 +13,12 @@ module Ffmprb
           fail Error, "volume cannot be nil"  if volume.nil?
         end
 
-        def filters_for(lbl, process:, video:, audio:)
+        def filters_for(lbl, video:, audio:)
 
           # Modulating volume
 
           lbl_aux = "ld#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
+          unfiltered.filters_for(lbl_aux, video: video, audio: audio) +
             [
               *((video && channel?(:video))? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): nil),
               *((audio && channel?(:audio))? Filter.volume(@volume, "#{lbl_aux}:a", "#{lbl}:a"): nil)

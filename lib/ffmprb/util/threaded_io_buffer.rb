@@ -2,8 +2,8 @@ module Ffmprb
 
   module Util
 
-    # XXX the events mechanism is currently unused (and commented out) => synchro mechanism not needed
-    # XXX partially specc'ed in file_spec
+    # TODO the events mechanism is currently unused (and commented out) => synchro mechanism not needed
+    # XXX *partially* specc'ed in file_spec
     class ThreadedIoBuffer
       # include Synchro
 

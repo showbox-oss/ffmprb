@@ -24,7 +24,7 @@ module Ffmprb
         end
         Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} started"
 
-        # XXX see threaded_io_buffer's XXX yield buff  if block_given?
+        # TODO see threaded_io_buffer's XXXs: yield buff  if block_given?
 
         [input_fifo_file, output_fifo_file]
       end
@@ -161,7 +161,7 @@ module Ffmprb
       (  # NOTE specially for temp files
         @path.respond_to?(:path)? @path.path : @path
       ).tap do |path|
-        # XXX ensure readabilty/writability/readiness
+        # TODO ensure readabilty/writability/readiness
         fail Error, "'#{path}' is un#{@mode.to_s[0..3]}able"  unless path && !path.empty?
       end
     end

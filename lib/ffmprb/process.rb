@@ -9,6 +9,10 @@ module Ffmprb
       attr_accessor :duck_audio_transition_length,
         :duck_audio_transition_in_start, :duck_audio_transition_out_start
 
+      attr_accessor :output_video_resolution
+      attr_accessor :output_video_fps
+      attr_accessor :output_audio_encoder
+
       attr_accessor :timeout
 
       def intermediate_channel_extname(*media)
@@ -23,16 +27,31 @@ module Ffmprb
         end
       end
 
+      def output_video_options
+        {
+          resolution: output_video_resolution,
+          fps: output_video_fps
+        }
+      end
+      def output_audio_options
+        {
+          encoder: output_audio_encoder
+        }
+      end
+
+      # NOTE Temporarily, av_main_i/o and not a_main_i/o
       def duck_audio(av_main_i, a_overlay_i, silence, av_main_o,
-        volume_lo: duck_audio_volume_lo, volume_hi: duck_audio_volume_hi,
+        volume_lo: duck_audio_volume_lo,
+        volume_hi: duck_audio_volume_hi,
         silent_min: duck_audio_silent_min,
-        video: {resolution: Ffmprb::CGA, fps: 30}  # XXX temporary
+        video:,  # NOTE Temporarily, video should not be here
+        audio:
         )
         Ffmprb.process(av_main_i, a_overlay_i, silence, av_main_o) do |main_input, overlay_input, duck_data, main_output|
 
           in_main = input(main_input)
           in_over = input(overlay_input)
-          output(main_output, video: video) do
+          output(main_output, video: video, audio: audio) do
             roll in_main
 
             ducked_overlay_volume = {0.0 => volume_lo}
@@ -51,7 +70,7 @@ module Ffmprb
                 (transition_out_start + Process.duck_audio_transition_length) => volume_lo
               )  if silent.end_at
             end
-            overlay in_over.audio.volume ducked_overlay_volume
+            overlay in_over.volume ducked_overlay_volume
 
             Ffmprb.logger.debug "Ducking audio with volumes: {#{ducked_overlay_volume.map{|t,v| "#{t}: #{v}"}.join ', '}}"
           end
@@ -69,15 +88,18 @@ module Ffmprb
     end
 
     def input(io)
-      Input.new(io).tap do |inp|
+      Input.new(io, @inputs.size).tap do |inp|
         @inputs << inp
       end
     end
 
-    def output(io, video: {resolution: Ffmprb::CGA, fps: 18}, audio: {}, &blk)
+    def output(io, video: true, audio: true, &blk)
       fail Error, "Just one output for now, sorry."  if @output
 
-      @output = Output.new(io, video: video, audio: audio).tap do |out|
+      @output = Output.new(io,
+        video: video && self.class.output_video_options.merge(video == true ? {} : video.to_h),
+        audio: audio && self.class.output_audio_options.merge(audio == true ? {} : audio.to_h)
+        ).tap do |out|
         out.instance_exec &blk
       end
     end
@@ -88,18 +110,11 @@ module Ffmprb
       # the threading policy (a parent death will be noticed and handled by children)
       thr = Util::Thread.new do
         # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
-        Util.ffmpeg(*command, limit: limit, timeout: timeout).tap do |res|  # XXX just to return something
+        Util.ffmpeg(*command, limit: limit, timeout: timeout).tap do |res|  # XXX just to return something -- no apparent practical use
           Util::Thread.join_children! limit, timeout: timeout
         end
       end
       thr.value  if thr.join limit  # NOTE should not block for more than limit
-    end
-
-    def [](obj)
-      case obj
-      when Input
-        @inputs.find_index(obj)
-      end
     end
 
     private
@@ -113,7 +128,7 @@ module Ffmprb
     end
 
     def output_options
-      @output.options_for self
+      @output.options
     end
 
   end

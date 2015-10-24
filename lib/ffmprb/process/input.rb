@@ -4,38 +4,9 @@ module Ffmprb
 
     class Input
 
-      def initialize(io)
+      def initialize(io, in_lbl)
         @io = resolve(io)
-      end
-
-      def options
-        ['-i', @io.path]
-      end
-
-      def filters_for(lbl, process:, video:, audio:)
-
-        # Channelling
-
-        if @io.respond_to?(:filters_for)
-          lbl_aux = "au#{lbl}"
-          @io.filters_for(lbl_aux, process: process, video: video, audio: audio) +
-            [
-              *((video && @io.channel?(:video))?
-                (channel?(:video)? Filter.copy("#{lbl_aux}:v", "#{lbl}:v"): Filter.nullsink("#{lbl_aux}:v")):
-                nil),
-              *((audio && @io.channel?(:audio))?
-                (channel?(:audio)? Filter.anull("#{lbl_aux}:a", "#{lbl}:a"): Filter.anullsink("#{lbl_aux}:a")):
-                nil)
-            ]
-        else
-          in_lbl = process[self]
-          raise Error, "Data corruption"  unless in_lbl
-          [
-            # XXX this fixup is temporary, leads to resolution loss on crop etc... *(video && @io.channel?(:video) && channel?(:video)? Filter.copy("#{in_lbl}:v", "#{lbl}:v"): nil),
-            *(video && @io.channel?(:video) && channel?(:video)? Filter.scale_pad_fps(video.resolution, video.fps, "#{in_lbl}:v", "#{lbl}:v"): nil),
-            *(audio && @io.channel?(:audio) && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
-          ]
-        end
+        @in_lbl = in_lbl
       end
 
       def video
@@ -60,6 +31,28 @@ module Ffmprb
 
       def volume(vol)
         Loud.new self, volume: vol
+      end
+
+
+      def options
+        ['-i', @io.path]
+      end
+
+      def filters_for(lbl, video:, audio:)
+        [
+          *(if video && channel?(:video)
+              if video.resolution && video.fps
+                Filter.scale_pad_fps video.resolution, video.fps, "#{@in_lbl}:v", "#{lbl}:v"
+              elsif video.resolution
+                Filter.scale_pad video.resolution, "#{@in_lbl}:v", "#{lbl}:v"
+              elsif video.fps
+                Filter.fps video.fps, "#{@in_lbl}:v", "#{lbl}:v"
+              else
+                Filter.copy "#{@in_lbl}:v", "#{lbl}:v"
+              end
+            end),
+          *(audio && channel?(:audio)? Filter.anull("#{@in_lbl}:a", "#{lbl}:a"): nil)
+        ]
       end
 
       def channel?(medium)

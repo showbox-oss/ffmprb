@@ -10,10 +10,12 @@ module Ffmprb
           @io = unfiltered
         end
 
-        def channel(medium)
-          @io.channel medium
+        protected
+
+        def unfiltered
+          @io
         end
-        
+
       end
 
     end
