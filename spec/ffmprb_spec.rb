@@ -30,8 +30,8 @@ describe Ffmprb do
       end
     end
 
-    def check_av_c_gor_at!(at)
-      @av_out_file.sample at: at do |shot, sound|
+    def check_av_c_gor_at!(at, file: @av_out_file)
+      file.sample at: at do |shot, sound|
         check_reddish! pixel_data(shot, 250, 10)
         check_greenish! pixel_data(shot, 250, 110)
         check_note! :C6, wave_data(sound)
@@ -101,6 +101,29 @@ describe Ffmprb do
       check_av_c_gor_at! 1
       expect(@av_out_file.resolution).to eq Ffmprb::HD_720p
       expect(@av_out_file.length).to be_approximately 9
+    end
+
+    it "should partially support multiple outputs" do
+      Ffmprb::File.temp('.mp4') do |another_av_out_file|
+        Ffmprb.process(@av_file_c_gor_9, @av_out_file, another_av_out_file) do |file_input, file_output1, file_output2|
+
+          in1 = input(file_input)
+          output(file_output1, video: {resolution: Ffmprb::HD_720p, fps: 30}) do
+            roll in1.cut(to: 6)
+          end
+          output(file_output2, video: {resolution: Ffmprb::HD_720p, fps: 30}) do
+            roll in1
+          end
+
+        end
+
+        check_av_c_gor_at! 1
+        check_av_c_gor_at! 1, file: another_av_out_file
+        expect(@av_out_file.resolution).to eq Ffmprb::HD_720p
+        expect(another_av_out_file.resolution).to eq Ffmprb::HD_720p
+        expect(@av_out_file.length).to be_approximately 6
+        expect(another_av_out_file.length).to be_approximately 9
+      end
     end
 
     it "should parse path arguments (and transcode)" do

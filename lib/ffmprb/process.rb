@@ -83,7 +83,7 @@ module Ffmprb
     attr_reader :timeout
 
     def initialize(*args, **opts, &blk)
-      @inputs = []
+      @inputs, @outputs = [], []
       @timeout = opts[:timeout] || self.class.timeout
     end
 
@@ -94,13 +94,12 @@ module Ffmprb
     end
 
     def output(io, video: true, audio: true, &blk)
-      fail Error, "Just one output for now, sorry."  if @output
-
-      @output = Output.new(io,
+      Output.new(io, @outputs.size,
         video: video && self.class.output_video_options.merge(video == true ? {} : video.to_h),
         audio: audio && self.class.output_audio_options.merge(audio == true ? {} : audio.to_h)
-        ).tap do |out|
-        out.instance_exec &blk
+      ).tap do |out|
+        @outputs << out
+        out.instance_exec &blk  if blk
       end
     end
 
@@ -120,15 +119,19 @@ module Ffmprb
     private
 
     def command
-      input_options + output_options
+      input_options + filter_options + output_options
     end
 
     def input_options
       @inputs.map(&:options).flatten(1)
     end
 
+    def filter_options
+      Filter.complex_options @outputs.map(&:filters).reduce(:+)
+    end
+
     def output_options
-      @output.options
+      @outputs.map(&:options).flatten(1)
     end
 
   end

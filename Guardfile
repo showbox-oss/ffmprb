@@ -1,8 +1,8 @@
 guard :rspec,
   :cmd => 'bin/rspec',
   :run_all => {:cmd => 'bin/rspec --profile'},
-  :all_after_pass => false,
-  :all_on_start => false,
+  :all_after_pass => true,
+  :all_on_start => true,
   :failed_mode => :focus do
 
   watch(%r{^spec/.+_spec\.rb$})

@@ -199,8 +199,8 @@ module Ffmprb
       def blend_v(duration, resolution, fps, inputs, output=nil)
         fail Error, "must be given 2 inputs"  unless inputs.size == 2
 
-        aux_lbl = "rn#{inputs.object_id}:v"  # should be sufficiently random
-        auxx_lbl = "x#{aux_lbl}:v"
+        aux_lbl = "blnd#{inputs[0]}"
+        auxx_lbl = "x#{aux_lbl}"
         [
           *white_source(duration, resolution, fps, aux_lbl),
           *inout([
@@ -214,8 +214,8 @@ module Ffmprb
       def blend_a(duration, inputs, output=nil)
         fail Error, "must be given 2 inputs"  unless inputs.size == 2
 
-        aux_lbl = "rn#{inputs.object_id}:a"  # should be sufficiently random
-        auxx_lbl = "x#{aux_lbl}:a"
+        aux_lbl = "blnd#{inputs[0]}"
+        auxx_lbl = "x#{aux_lbl}"
         [
           *afade_out(duration, inputs[0], aux_lbl),
           *afade_in(duration, inputs[1], auxx_lbl),
