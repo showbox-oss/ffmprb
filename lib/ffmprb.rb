@@ -15,13 +15,13 @@ module Ffmprb
 
   class << self
 
-    # NOTE the form with the block returns the result of #run
-    # NOTE the form without the block returns the process (before it is run) - advanced use
-    # XXX is this clear enough? Do we really need the second form?
+    # TODO limit:
     def process(*args, &blk)
-      logger.debug "Starting process with #{args} in #{blk.source_location}"
+      fail Error, "process: nothing ;( gimme a block!"  unless blk
+
       process = Process.new
-      return process  unless blk
+
+      logger.debug "Starting process with #{args} in #{blk.source_location}"
 
       process.instance_exec *args, &blk
       logger.debug "Initialized process with #{args} in #{blk.source_location}"

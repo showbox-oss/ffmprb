@@ -17,6 +17,7 @@ module Ffmprb
 
       end
 
+      # TODO unique labeling does not justify idx, will be refactored
       def initialize(io, idx, video:, audio:)
         @io = resolve(io)
         @idx = idx
@@ -301,8 +302,7 @@ module Ffmprb
         fail Error, "Nothing to lay over yet..."  if @reels.to_a.empty?
         fail Error, "Ducking overlays should come last... for now"  if !duck && @overlays.to_a.last && @overlays.to_a.last.duck
 
-        (@overlays ||= []) <<
-          OpenStruct.new(reel: reel, at: at, duck: duck)
+        add_snip reel, at, duck
       end
 
       def channel(medium)
@@ -349,6 +349,11 @@ module Ffmprb
 
         (@reels ||= []) <<
           OpenStruct.new(reel: reel, after: after, transition: trans, full_screen?: full_screen)
+      end
+
+      def add_snip(reel, at, duck)
+        (@overlays ||= []) <<
+          OpenStruct.new(reel: reel, at: at, duck: duck)
       end
 
     end

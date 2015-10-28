@@ -14,7 +14,7 @@ module Ffmprb
   Process.output_video_fps = 30
   Process.output_audio_encoder = 'libmp3lame'
 
-  Util.ffmpeg_cmd = ['ffmpeg']
+  Util.ffmpeg_cmd = %w[ffmpeg -y]
   Util.ffprobe_cmd = ['ffprobe']
   Util.cmd_timeout = 6
 

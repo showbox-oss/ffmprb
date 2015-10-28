@@ -46,7 +46,7 @@ describe Ffmprb do
       end
     end
 
-    def check_video_btn_wtb_at!(at, black: false)
+    def check_av_btn_wtb_at!(at, black: false)
       @av_out_file.sample at: at do |shot, sound|
         pixel = pixel_data(shot, 250, 110)
         wave = wave_data(sound)
@@ -105,13 +105,13 @@ describe Ffmprb do
 
     it "should partially support multiple outputs" do
       Ffmprb::File.temp('.mp4') do |another_av_out_file|
-        Ffmprb.process(@av_file_c_gor_9, @av_out_file, another_av_out_file) do |file_input, file_output1, file_output2|
+        Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output1|
 
           in1 = input(file_input)
           output(file_output1, video: {resolution: Ffmprb::HD_720p, fps: 30}) do
             roll in1.cut(to: 6)
           end
-          output(file_output2, video: {resolution: Ffmprb::HD_720p, fps: 30}) do
+          output(another_av_out_file, video: {resolution: Ffmprb::HD_720p, fps: 30}) do
             roll in1
           end
 
@@ -157,6 +157,38 @@ describe Ffmprb do
       expect(@av_out_file.length).to be_approximately 18
     end
 
+    # TODO doesn't work with non-streaming files...
+    it "should loop" do
+      Ffmprb.process(@av_file_btn_wtb_16, @av_out_stream) do |file_input, file_output|
+
+        in1 = input(file_input)
+        output(file_output) do
+          roll in1
+        end
+
+      end
+
+      expect(@av_out_stream.length).to be_approximately 16
+
+      Ffmprb.process(@av_out_stream, @av_out_file) do |file_input, file_output|
+
+        in1 = input(file_input)
+        output(file_output) do
+          roll in1.cut(to: 12).loop.cut(to: 47)
+        end
+
+      end
+
+      check_av_btn_wtb_at! 2
+      check_av_btn_wtb_at! 6, black: true
+      check_av_btn_wtb_at! 10
+      check_av_btn_wtb_at! 14
+      check_av_btn_wtb_at! 18, black: true
+      check_av_btn_wtb_at! 45
+
+      expect(@av_out_file.length).to be_approximately 47
+    end
+
     it "should roll reels after specific time (cutting previous reels)" do
       Ffmprb.process(@av_file_c_gor_9, @av_file_btn_wtb_16, @av_out_file) do |file_input, file_input_2, file_output|
 
@@ -170,7 +202,7 @@ describe Ffmprb do
       end
 
       check_av_c_gor_at! 2
-      check_video_btn_wtb_at! 4
+      check_av_btn_wtb_at! 4
       expect(@av_out_file.length).to be_approximately 19
     end
 
@@ -521,7 +553,7 @@ describe Ffmprb do
             sound.volume
           end
 
-        check_video_btn_wtb_at! 2
+        check_av_btn_wtb_at! 2
 
         wave_data(@av_out_file.sample at: 2, video: false) do |sound|
           expect(sound.frequency).to be_approximately NOTES.B6

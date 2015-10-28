@@ -76,8 +76,6 @@ module Ffmprb
         ::File.join Dir.tmpdir, Dir::Tmpname.make_tmpname('', 'p' + extname)
       end
 
-      protected
-
       # NOTE must be timeout-safe
       def async_opener(file, mode)
         ->{
