@@ -17,10 +17,11 @@ module Ffmprb
 
       end
 
-      # TODO unique labeling does not justify idx, will be refactored
-      def initialize(io, idx, video:, audio:)
+      attr_reader :process
+
+      def initialize(io, process, video:, audio:)
         @io = resolve(io)
-        @idx = idx
+        @process = process
         @channels = {
           video: video && @io.channel?(:video) && OpenStruct.new(video),
           audio: audio && @io.channel?(:audio) && OpenStruct.new(audio)
@@ -39,6 +40,8 @@ module Ffmprb
         fail Error, "Supporting just full_screen for now, sorry."  unless @reels.all?(&:full_screen?)
         return @filters  if @filters
 
+        idx = process.output_index(self)
+
         @filters = []
 
         # Concatting
@@ -52,7 +55,7 @@ module Ffmprb
 
             # NOTE mapping input to this lbl
 
-            lbl = "o#{@idx}rl#{i}"
+            lbl = "o#{idx}rl#{i}"
 
             # NOTE Image-Padding to match the target resolution
             # TODO full screen only at the moment (see exception above)
@@ -130,11 +133,11 @@ module Ffmprb
 
               # NOTE snip the end of the previous segment and combine with this reel
 
-              lbl_end1 = "o#{@idx}tm#{i}b"
-              lbl_reel = "o#{@idx}tn#{i}"
+              lbl_end1 = "o#{idx}tm#{i}b"
+              lbl_reel = "o#{idx}tn#{i}"
 
               if !lbl  # no reel
-                lbl_aux = "o#{@idx}bk#{i}"
+                lbl_aux = "o#{idx}bk#{i}"
                 @filters.concat(
                   Filter.blank_source transition_length, channel(:video).resolution, channel(:video).fps, "#{lbl_aux}:v"
                 )  if channel?(:video)
@@ -168,7 +171,7 @@ module Ffmprb
 
         segments.compact!
 
-        lbl_out = "o#{@idx}o"
+        lbl_out = "o#{idx}o"
 
         @filters.concat(
           Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
@@ -188,9 +191,9 @@ module Ffmprb
 
           # Audio overlaying
 
-          lbl_nxt = "o#{@idx}o#{i}"
+          lbl_nxt = "o#{idx}o#{i}"
 
-          lbl_over = "o#{@idx}l#{i}"
+          lbl_over = "o#{idx}l#{i}"
           @filters.concat(  # NOTE audio only, see above
             over_reel.reel.filters_for lbl_over, video: false, audio: channel(:audio)
           )
@@ -235,7 +238,7 @@ module Ffmprb
             Ffmprb.logger.debug "Re-routed the main audio output (#{main_av_inter_o.path}->...->#{main_av_o.path}) through the process of audio ducking"
 
             over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname :audio)
-            lbl_over = "o#{@idx}l#{i}"
+            lbl_over = "o#{idx}l#{i}"
             @filters.concat(
               over_reel.reel.filters_for lbl_over, video: false, audio: channel(:audio)
             )
@@ -245,12 +248,17 @@ module Ffmprb
             inter_i, inter_o = File.threaded_buffered_fifo(main_av_inter_o.extname)
             Ffmprb.logger.debug "Allocated fifos to buffer media (#{inter_i.path}>#{inter_o.path}) while finding silence"
 
+            ignore_broken_pipe_was = process.ignore_broken_pipe
+            process.ignore_broken_pipe = true  # NOTE audio ducking process may break the overlay pipe
+
             Util::Thread.new "audio ducking" do
               silence = Ffmprb.find_silence(main_av_inter_o, inter_i)
 
               Ffmprb.logger.debug "Audio ducking with silence: [#{silence.map{|s| "#{s.start_at}-#{s.end_at}"}.join ', '}]"
 
-              Process.duck_audio inter_o, over_a_o, silence, main_av_o, video: channel(:video), audio: channel(:audio)
+              Process.duck_audio inter_o, over_a_o, silence, main_av_o,
+                process_options: {ignore_broken_pipe: ignore_broken_pipe_was, timeout: process.timeout},
+                video: channel(:video), audio: channel(:audio)
             end
           end
 

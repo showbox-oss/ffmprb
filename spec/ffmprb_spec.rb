@@ -126,6 +126,32 @@ describe Ffmprb do
       end
     end
 
+    it "should ignore broken pipes (or not)" do
+      [:to, :not_to].each do |to_not_to|
+        Ffmprb::File.temp_fifo('.flv') do |av_pipe|
+          Thread.new do
+            begin
+              tmp = File.open(av_pipe.path, 'r')
+              tmp.read(1)
+            ensure
+              tmp.close  if tmp
+            end
+          end
+
+          expect do
+            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipe: to_not_to == :not_to) do |file_input|
+
+              in1 = input(file_input)
+              output(av_pipe, video: {resolution: Ffmprb::HD_1080p, fps: 60}) do
+                roll in1.loop
+              end
+
+            end
+          end.send to_not_to, raise_error(*(to_not_to == :to ? Ffmprb::Error : nil))
+        end
+      end
+    end
+
     it "should parse path arguments (and transcode)" do
       Ffmprb.process(@av_file_e_bow_9.path, @av_out_file.path) do |file_input, file_output|
 
@@ -582,7 +608,7 @@ describe Ffmprb do
               in2 = input(input2)
               output(output1) do
                 lay in1.cut(to: 10), transition: {blend: 1}
-                overlay in2.cut(from: 4), duck: :audio
+                overlay in2.cut(from: 4).loop, duck: :audio
               end
 
             end
@@ -596,6 +622,8 @@ describe Ffmprb do
               check_black! pixel_data(snap, 100, 100)
               expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
             end
+
+            expect(@av_out_stream.length).to be_approximately 10
           ensure
             Ffmprb::Util::ThreadedIoBuffer.block_size = block_size
           end

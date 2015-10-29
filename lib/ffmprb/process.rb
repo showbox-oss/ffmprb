@@ -44,10 +44,11 @@ module Ffmprb
         volume_lo: duck_audio_volume_lo,
         volume_hi: duck_audio_volume_hi,
         silent_min: duck_audio_silent_min,
+        process_options: {},
         video:,  # NOTE Temporarily, video should not be here
         audio:
         )
-        Ffmprb.process do
+        Ffmprb.process **process_options do
 
           in_main = input(av_main_i)
           in_over = input(a_overlay_i)
@@ -80,13 +81,14 @@ module Ffmprb
 
     end
 
-    attr_reader :timeout
+    attr_accessor :timeout
+    attr_accessor :ignore_broken_pipe
 
     def initialize(*args, **opts)
       @inputs, @outputs = [], []
-      @timeout = opts.delete(:timeout) || self.class.timeout
+      self.timeout = opts.delete(:timeout) || self.class.timeout
 
-      @ignore_broken_pipe = opts.delete(:ignore_broken_pipe)  # XXX SPEC ME
+      self.ignore_broken_pipe = opts.delete(:ignore_broken_pipe)
       fail Error, "Unknown options: #{opts}"  unless opts.empty?
     end
 
@@ -107,13 +109,17 @@ module Ffmprb
     end
 
     def output(io, video: true, audio: true, &blk)
-      Output.new(io, @outputs.size,
+      Output.new(io, self,
         video: channel_params(video, self.class.output_video_options),
         audio: channel_params(audio, self.class.output_audio_options)
       ).tap do |out|
         @outputs << out
         out.instance_exec &blk  if blk
       end
+    end
+
+    def output_index(output)
+      @outputs.index output
     end
 
     # NOTE the one and the only entry-point processing function which spawns threads etc
