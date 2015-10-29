@@ -16,10 +16,10 @@ module Ffmprb
   class << self
 
     # TODO limit:
-    def process(*args, &blk)
+    def process(*args, **opts, &blk)
       fail Error, "process: nothing ;( gimme a block!"  unless blk
 
-      process = Process.new
+      process = Process.new(**opts)
 
       logger.debug "Starting process with #{args} in #{blk.source_location}"
 

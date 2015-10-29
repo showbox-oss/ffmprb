@@ -66,7 +66,7 @@ module Ffmprb
         return fifo_file  unless block_given?
 
         begin
-          yield
+          yield fifo_file
         ensure
           fifo_file.remove
         end
