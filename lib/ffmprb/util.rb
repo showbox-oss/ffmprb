@@ -19,12 +19,12 @@ module Ffmprb
         sh *ffprobe_cmd, *args, limit: limit, timeout: timeout
       end
 
-      def ffmpeg(*args, limit: nil, timeout: cmd_timeout)
+      def ffmpeg(*args, limit: nil, timeout: cmd_timeout, ignore_broken_pipe: false)
         args = ['-loglevel', 'debug'] + args  if Ffmprb.debug
-        sh *ffmpeg_cmd, '-y', *args, output: :stderr, limit: limit, timeout: timeout
+        sh *ffmpeg_cmd, *args, output: :stderr, limit: limit, timeout: timeout, ignore_broken_pipe: ignore_broken_pipe
       end
 
-      def sh(*cmd, output: :stdout, log: :stderr, limit: nil, timeout: cmd_timeout)
+      def sh(*cmd, output: :stdout, log: :stderr, limit: nil, timeout: cmd_timeout, ignore_broken_pipe: false)
         cmd = cmd.map &:to_s  unless cmd.size == 1
         cmd_str = cmd.size != 1 ? cmd.map{|c| "\"#{c}\""}.join(' ') : cmd.first
         timeout = [timeout, limit].compact.min
@@ -39,8 +39,15 @@ module Ffmprb
               stderr_r = Reader.new(stderr, true, log == :stderr && log_cmd)
 
               Thread.timeout_or_live(limit, log: "while waiting for `#{cmd_str}`", timeout: timeout) do |time|
-                fail Error, "#{cmd_str}:\n#{stderr_r.read}"  unless
-                  wait_thr.value.exitstatus == 0  # NOTE blocking
+                value = wait_thr.value
+                status = value.exitstatus  # NOTE blocking
+                if status != 0
+                  if ignore_broken_pipe && value.signaled? && value.termsig == Signal.list['PIPE']
+                    Ffmprb.logger.debug "Ignoring broken pipe: #{cmd_str}"
+                  else
+                    fail Error, "#{cmd_str} (#{status || "sig##{value.termsig}"}):\n#{stderr_r.read}"
+                  end
+                end
               end
               Ffmprb.logger.debug "FINISHED: #{cmd_str}"
 

@@ -17,8 +17,10 @@ module Ffmprb
 
       end
 
-      def initialize(io, video:, audio:)
+      # TODO unique labeling does not justify idx, will be refactored
+      def initialize(io, idx, video:, audio:)
         @io = resolve(io)
+        @idx = idx
         @channels = {
           video: video && @io.channel?(:video) && OpenStruct.new(video),
           audio: audio && @io.channel?(:audio) && OpenStruct.new(audio)
@@ -32,11 +34,12 @@ module Ffmprb
 
       # XXX This method is exceptionally long at the moment. This is not too grand.
       # However, structuring the code should be undertaken with care, as not to harm the composition clarity.
-      def options()
+      def filters
         fail Error, "Nothing to roll..."  unless @reels
         fail Error, "Supporting just full_screen for now, sorry."  unless @reels.all?(&:full_screen?)
+        return @filters  if @filters
 
-        filters = []
+        @filters = []
 
         # Concatting
         segments = []
@@ -49,12 +52,12 @@ module Ffmprb
 
             # NOTE mapping input to this lbl
 
-            lbl = "rl#{i}"
+            lbl = "o#{@idx}rl#{i}"
 
             # NOTE Image-Padding to match the target resolution
             # TODO full screen only at the moment (see exception above)
 
-            filters.concat(
+            @filters.concat(
               curr_reel.reel.filters_for lbl, video: channel(:video), audio: channel(:audio)
             )
           end
@@ -70,21 +73,21 @@ module Ffmprb
 
             lbl_pad = "bl#{prev_lbl}#{i}"
             # NOTE generously padding the previous segment to support for all the cases
-            filters.concat(
+            @filters.concat(
               Filter.blank_source trim_prev_at + transition_length,
               channel(:video).resolution, channel(:video).fps, "#{lbl_pad}:v"
             )  if channel?(:video)
-            filters.concat(
+            @filters.concat(
               Filter.silent_source trim_prev_at + transition_length, "#{lbl_pad}:a"
             )  if channel?(:audio)
 
             if prev_lbl
               lbl_aux = lbl_pad
               lbl_pad = "pd#{prev_lbl}#{i}"
-              filters.concat(
+              @filters.concat(
                 Filter.concat_v ["#{prev_lbl}:v", "#{lbl_aux}:v"], "#{lbl_pad}:v"
               )  if channel?(:video)
-              filters.concat(
+              @filters.concat(
                 Filter.concat_a ["#{prev_lbl}:a", "#{lbl_aux}:a"], "#{lbl_pad}:a"
               )  if channel?(:audio)
             end
@@ -94,10 +97,10 @@ module Ffmprb
               # NOTE Split the previous segment for transition
 
               if trim_prev_at > 0
-                filters.concat(
+                @filters.concat(
                   Filter.split "#{lbl_pad}:v", ["#{lbl_pad}a:v", "#{lbl_pad}b:v"]
                 )  if channel?(:video)
-                filters.concat(
+                @filters.concat(
                   Filter.asplit "#{lbl_pad}:a", ["#{lbl_pad}a:a", "#{lbl_pad}b:a"]
                 )  if channel?(:audio)
                 lbl_pad, lbl_pad_ = "#{lbl_pad}a", "#{lbl_pad}b"
@@ -112,10 +115,10 @@ module Ffmprb
 
               new_prev_lbl = "tm#{prev_lbl}#{i}a"
 
-              filters.concat(
+              @filters.concat(
                 Filter.trim 0, trim_prev_at, "#{lbl_pad}:v", "#{new_prev_lbl}:v"
               )  if channel?(:video)
-              filters.concat(
+              @filters.concat(
                 Filter.atrim 0, trim_prev_at, "#{lbl_pad}:a", "#{new_prev_lbl}:a"
               )  if channel?(:audio)
 
@@ -127,31 +130,31 @@ module Ffmprb
 
               # NOTE snip the end of the previous segment and combine with this reel
 
-              lbl_end1 = "tm#{i}b"
-              lbl_reel = "tn#{i}"
+              lbl_end1 = "o#{@idx}tm#{i}b"
+              lbl_reel = "o#{@idx}tn#{i}"
 
               if !lbl  # no reel
-                lbl_aux = "bk#{i}"
-                filters.concat(
+                lbl_aux = "o#{@idx}bk#{i}"
+                @filters.concat(
                   Filter.blank_source transition_length, channel(:video).resolution, channel(:video).fps, "#{lbl_aux}:v"
                 )  if channel?(:video)
-                filters.concat(
+                @filters.concat(
                   Filter.silent_source transition_length, "#{lbl_aux}:a"
                 )  if channel?(:audio)
               end  # NOTE else hope lbl is long enough for the transition
 
-              filters.concat(
+              @filters.concat(
                 Filter.trim trim_prev_at, trim_prev_at + transition_length, "#{lbl_pad_}:v", "#{lbl_end1}:v"
               )  if channel?(:video)
-              filters.concat(
+              @filters.concat(
                 Filter.atrim trim_prev_at, trim_prev_at + transition_length, "#{lbl_pad_}:a", "#{lbl_end1}:a"
               )  if channel?(:audio)
 
               # TODO the only supported transition, see #*lay
-              filters.concat(
+              @filters.concat(
                 Filter.blend_v transition_length, channel(:video).resolution, channel(:video).fps, ["#{lbl_end1}:v", "#{lbl || lbl_aux}:v"], "#{lbl_reel}:v"
               ) if channel?(:video)
-              filters.concat(
+              @filters.concat(
                 Filter.blend_a transition_length, ["#{lbl_end1}:a", "#{lbl || lbl_aux}:a"], "#{lbl_reel}:a"
               ) if channel?(:audio)
 
@@ -165,12 +168,12 @@ module Ffmprb
 
         segments.compact!
 
-        lbl_out = 'oo'
+        lbl_out = "o#{@idx}o"
 
-        filters.concat(
+        @filters.concat(
           Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
         )  if channel?(:video)
-        filters.concat(
+        @filters.concat(
           Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
         )  if channel?(:audio)
 
@@ -185,16 +188,16 @@ module Ffmprb
 
           # Audio overlaying
 
-          lbl_nxt = "oo#{i}"
+          lbl_nxt = "o#{@idx}o#{i}"
 
-          lbl_over = "ol#{i}"
-          filters.concat(  # NOTE audio only, see above
+          lbl_over = "o#{@idx}l#{i}"
+          @filters.concat(  # NOTE audio only, see above
             over_reel.reel.filters_for lbl_over, video: false, audio: channel(:audio)
           )
-          filters.concat(
+          @filters.concat(
             Filter.copy "#{lbl_out}:v", "#{lbl_nxt}:v"
           )  if channel?(:video)
-          filters.concat(
+          @filters.concat(
             Filter.amix_to_first_same_volume ["#{lbl_out}:a", "#{lbl_over}:a"], "#{lbl_nxt}:a"
           )  if channel?(:audio)
 
@@ -203,9 +206,9 @@ module Ffmprb
 
         # NOTE multi-process overlays last
 
-        channel_lbl_ios = {}  # XXX this is a spaghetti machine
-        channel_lbl_ios["#{lbl_out}:v"] = @io  if channel?(:video)
-        channel_lbl_ios["#{lbl_out}:a"] = @io  if channel?(:audio)
+        @channel_lbl_ios = {}  # XXX this is a spaghetti machine
+        @channel_lbl_ios["#{lbl_out}:v"] = @io  if channel?(:video)
+        @channel_lbl_ios["#{lbl_out}:a"] = @io  if channel?(:audio)
 
         # TODO supporting just "full" overlays for now, see exception in #add_reel
         @overlays.to_a.each_with_index do |over_reel, i|
@@ -217,7 +220,7 @@ module Ffmprb
             # So ducking just audio here, ye?
             # XXX check if we're on audio channel
 
-            main_av_o = channel_lbl_ios["#{lbl_out}:a"]
+            main_av_o = @channel_lbl_ios["#{lbl_out}:a"]
             fail Error, "Main output does not contain audio to duck"  unless main_av_o
             # XXX#181845 must really seperate channels for streaming (e.g. mp4 wouldn't stream through the fifo)
             # NOTE what really must be done here (optimisation & compatibility):
@@ -226,17 +229,17 @@ module Ffmprb
             # - a-output will go through the ducking process below and its output will be input to the m+e process above
             # - v-output will have to use another thread-buffered pipe
             main_av_inter_o = File.temp_fifo(main_av_o.extname)
-            channel_lbl_ios.each do |channel_lbl, io|
-              channel_lbl_ios[channel_lbl] = main_av_inter_o  if io == main_av_o  # XXX ~~~spaghetti
+            @channel_lbl_ios.each do |channel_lbl, io|
+              @channel_lbl_ios[channel_lbl] = main_av_inter_o  if io == main_av_o  # XXX ~~~spaghetti
             end
             Ffmprb.logger.debug "Re-routed the main audio output (#{main_av_inter_o.path}->...->#{main_av_o.path}) through the process of audio ducking"
 
             over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname :audio)
-            lbl_over = "ol#{i}"
-            filters.concat(
+            lbl_over = "o#{@idx}l#{i}"
+            @filters.concat(
               over_reel.reel.filters_for lbl_over, video: false, audio: channel(:audio)
             )
-            channel_lbl_ios["#{lbl_over}:a"] = over_a_i
+            @channel_lbl_ios["#{lbl_over}:a"] = over_a_i
             Ffmprb.logger.debug "Routed and buffering an auxiliary output fifos (#{over_a_i.path}>#{over_a_o.path}) for overlay"
 
             inter_i, inter_o = File.threaded_buffered_fifo(main_av_inter_o.extname)
@@ -253,21 +256,27 @@ module Ffmprb
 
         end
 
-        Filter.complex_options(filters).tap do |options|
+        @filters
+      end
 
-          io_channel_lbls = {}  # XXX ~~~spaghetti
-          channel_lbl_ios.each do |channel_lbl, io|
-            (io_channel_lbls[io] ||= []) << channel_lbl
-          end
-          io_channel_lbls.each do |io, channel_lbls|
-            channel_lbls.each do |channel_lbl|
-              options << '-map' << "[#{channel_lbl}]"
-            end
-            options.concat self.class.audio_cmd_options(channel :audio)  if channel? :audio
-            options << io.path
-          end
+      def options
+        fail Error, "Must generate filters first."  unless @channel_lbl_ios
 
+        options = []
+
+        io_channel_lbls = {}  # XXX ~~~spaghetti
+        @channel_lbl_ios.each do |channel_lbl, io|
+          (io_channel_lbls[io] ||= []) << channel_lbl
         end
+        io_channel_lbls.each do |io, channel_lbls|
+          channel_lbls.each do |channel_lbl|
+            options << '-map' << "[#{channel_lbl}]"
+          end
+          options.concat self.class.audio_cmd_options(channel :audio)  if channel? :audio
+          options << io.path
+        end
+
+        options
       end
 
       def roll(
@@ -293,8 +302,7 @@ module Ffmprb
         fail Error, "Nothing to lay over yet..."  if @reels.to_a.empty?
         fail Error, "Ducking overlays should come last... for now"  if !duck && @overlays.to_a.last && @overlays.to_a.last.duck
 
-        (@overlays ||= []) <<
-          OpenStruct.new(reel: reel, at: at, duck: duck)
+        add_snip reel, at, duck
       end
 
       def channel(medium)
@@ -341,6 +349,11 @@ module Ffmprb
 
         (@reels ||= []) <<
           OpenStruct.new(reel: reel, after: after, transition: trans, full_screen?: full_screen)
+      end
+
+      def add_snip(reel, at, duck)
+        (@overlays ||= []) <<
+          OpenStruct.new(reel: reel, at: at, duck: duck)
       end
 
     end

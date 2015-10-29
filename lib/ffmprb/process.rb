@@ -47,15 +47,15 @@ module Ffmprb
         video:,  # NOTE Temporarily, video should not be here
         audio:
         )
-        Ffmprb.process(av_main_i, a_overlay_i, silence, av_main_o) do |main_input, overlay_input, duck_data, main_output|
+        Ffmprb.process do
 
-          in_main = input(main_input)
-          in_over = input(overlay_input)
-          output(main_output, video: video, audio: audio) do
+          in_main = input(av_main_i)
+          in_over = input(a_overlay_i)
+          output(av_main_o, video: video, audio: audio) do
             roll in_main
 
             ducked_overlay_volume = {0.0 => volume_lo}
-            duck_data.each do |silent|
+            silence.each do |silent|
               next  if silent.end_at && silent.start_at && (silent.end_at - silent.start_at) < silent_min
 
               transition_in_start = silent.start_at + Process.duck_audio_transition_in_start
@@ -82,35 +82,49 @@ module Ffmprb
 
     attr_reader :timeout
 
-    def initialize(*args, **opts, &blk)
-      @inputs = []
-      @timeout = opts[:timeout] || self.class.timeout
+    def initialize(*args, **opts)
+      @inputs, @outputs = [], []
+      @timeout = opts.delete(:timeout) || self.class.timeout
+
+      @ignore_broken_pipe = opts.delete(:ignore_broken_pipe)  # XXX SPEC ME
+      fail Error, "Unknown options: #{opts}"  unless opts.empty?
     end
 
     def input(io)
-      Input.new(io, @inputs.size).tap do |inp|
+      Input.new(io, self).tap do |inp|
         @inputs << inp
       end
     end
 
-    def output(io, video: true, audio: true, &blk)
-      fail Error, "Just one output for now, sorry."  if @output
+    def temp_input(extname)  # XXX SPEC ME
+      input(nil).tap do |inp|
+        inp.temporise! extname
+      end
+    end
 
-      @output = Output.new(io,
-        video: video && self.class.output_video_options.merge(video == true ? {} : video.to_h),
-        audio: audio && self.class.output_audio_options.merge(audio == true ? {} : audio.to_h)
-        ).tap do |out|
-        out.instance_exec &blk
+    def input_label(input)
+      @inputs.index input
+    end
+
+    def output(io, video: true, audio: true, &blk)
+      Output.new(io, @outputs.size,
+        video: channel_params(video, self.class.output_video_options),
+        audio: channel_params(audio, self.class.output_audio_options)
+      ).tap do |out|
+        @outputs << out
+        out.instance_exec &blk  if blk
       end
     end
 
     # NOTE the one and the only entry-point processing function which spawns threads etc
-    def run(limit: nil)  # (async: false)
+    def run(limit: nil)  # TODO (async: false)
       # NOTE this is both for the future async: option and according to
       # the threading policy (a parent death will be noticed and handled by children)
       thr = Util::Thread.new do
         # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
-        Util.ffmpeg(*command, limit: limit, timeout: timeout).tap do |res|  # XXX just to return something -- no apparent practical use
+        # XXX just to return something -- no apparent practical use
+        cmd = command
+        Util.ffmpeg(*cmd, limit: limit, timeout: timeout, ignore_broken_pipe: @ignore_broken_pipe).tap do |res|
           Util::Thread.join_children! limit, timeout: timeout
         end
       end
@@ -120,15 +134,27 @@ module Ffmprb
     private
 
     def command
-      input_options + output_options
+      input_options + filter_options + output_options
     end
 
     def input_options
       @inputs.map(&:options).flatten(1)
     end
 
+    def filter_options
+      Filter.complex_options @outputs.map(&:filters).reduce(:+)
+    end
+
     def output_options
-      @output.options
+      @outputs.map(&:options).flatten(1)
+    end
+
+    def channel_params(value, default)
+      if value
+        default.merge(value == true ? {} : value.to_h)
+      elsif value != false
+        {}
+      end
     end
 
   end

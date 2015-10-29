@@ -4,6 +4,10 @@ module Ffmprb
 
     class Input
 
+      def cut(from: 0, to: nil)
+        Cut.new self, from: from, to: to
+      end
+
       class Cut < ChainBase
 
         attr_reader :from, :to

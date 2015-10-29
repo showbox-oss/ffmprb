@@ -4,6 +4,10 @@ module Ffmprb
 
     class Input
 
+      def crop(ratio)  # NOTE ratio is either a CROP_PARAMS symbol-ratio hash or a single (global) ratio
+        Cropped.new self, crop: ratio
+      end
+
       class Cropped < ChainBase
 
         attr_reader :ratios

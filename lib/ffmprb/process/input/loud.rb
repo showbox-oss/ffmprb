@@ -4,6 +4,14 @@ module Ffmprb
 
     class Input
 
+      def mute
+        Loud.new self, volume: 0
+      end
+
+      def volume(vol)
+        Loud.new self, volume: vol
+      end
+
       class Loud < ChainBase
 
         def initialize(unfiltered, volume:)
