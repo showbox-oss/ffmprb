@@ -10,6 +10,10 @@ module Ffmprb
   Process.duck_audio_volume_lo = 0.1
   Process.timeout = 15
 
+  Process.output_video_resolution = CGA
+  Process.output_video_fps = 30
+  Process.output_audio_encoder = 'libmp3lame'
+
   Util.ffmpeg_cmd = ['ffmpeg']
   Util.ffprobe_cmd = ['ffprobe']
   Util.cmd_timeout = 6

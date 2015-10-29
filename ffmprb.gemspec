@@ -18,7 +18,8 @@ Gem::Specification.new do |spec|
   spec.executables   = spec.files.grep(%r{^exe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
-  spec.add_dependency 'mkfifo'  # XXX I'm not happy with this dependency, and there's nothing crossplatform (= for windoze too) at the moment
+  # NOTE I'm not happy with this dependency, and there's nothing crossplatform (= for windoze too) at the moment
+  spec.add_dependency 'mkfifo'
 
   spec.add_development_dependency 'bundler', '>= 1.9.9'
   spec.add_development_dependency 'byebug', '>= 4.0.5'

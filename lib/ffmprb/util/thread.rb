@@ -5,7 +5,7 @@ module Ffmprb
     # NOTE doesn't have specs (and not too proud about it)
     class Thread < ::Thread
 
-      class Error < StandardError; end
+      class Error < Ffmprb::Error; end
       class ParentError < Error; end
 
       class << self
@@ -70,7 +70,7 @@ module Ffmprb
         sync_q.deq
       end
 
-      # XXX protected: none of these methods should be called by a user code, the only public methods are above
+      # TODO protected: none of these methods should be called by a user code, the only public methods are above
 
       def live!
         fail ParentError  if @parent.status.nil?
