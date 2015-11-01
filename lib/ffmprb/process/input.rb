@@ -72,3 +72,11 @@ module Ffmprb
   end
 
 end
+
+require_relative 'input/chain_base'
+require_relative 'input/channeled'
+require_relative 'input/cropped'
+require_relative 'input/cut'
+require_relative 'input/looping'
+require_relative 'input/loud'
+require_relative 'input/temp'

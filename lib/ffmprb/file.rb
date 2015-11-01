@@ -188,3 +188,5 @@ module Ffmprb
   end
 
 end
+
+require_relative 'file/sample'

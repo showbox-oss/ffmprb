@@ -1,5 +1,3 @@
-require 'ostruct'
-
 module Ffmprb
 
   class Process

@@ -1,5 +1,3 @@
-require 'ostruct'
-
 require 'rmagick'
 require 'sox'
 

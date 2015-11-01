@@ -1,4 +1,5 @@
 require 'logger'
+require 'ostruct'
 
 # IMPORTANT NOTE ffmprb uses threads internally, however, it is not "thread-safe"
 
@@ -51,6 +52,11 @@ end
 
 Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
 
-Dir["#{__FILE__.slice /(.*).rb$/, 1}/**/*.rb"].each{|f| require f}
+require_relative 'ffmprb/execution'
+require_relative 'ffmprb/file'
+require_relative 'ffmprb/filter'
+require_relative 'ffmprb/find_silence'
+require_relative 'ffmprb/process'
+require_relative 'ffmprb/util'
 
 require 'defaults'

@@ -166,3 +166,6 @@ module Ffmprb
   end
 
 end
+
+require_relative 'process/input'
+require_relative 'process/output'
