@@ -101,6 +101,27 @@ describe Ffmprb do
       expect(@av_out_file.length).to be_approximately 9
     end
 
+    it "should transcode video (no audio) with defaults" do
+      Ffmprb::File.temp_fifo '.apng' do |tmp_papng|
+
+        Thread.new do
+          Ffmprb::Util.ffmpeg '-filter_complex', 'testsrc=d=2:r=25', tmp_papng.path
+        end
+
+        Ffmprb.process(@av_out_file) do |file_output|
+
+          in1 = input(tmp_papng, default_fps: 25)
+          output(file_output, audio: false) do  # XXX
+            roll in1
+          end
+
+        end
+
+        expect(@av_out_file.length).to be_approximately 2
+
+      end
+    end
+
     it "should partially support multiple outputs" do
       Ffmprb::File.temp('.mp4') do |another_av_out_file|
         Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output1|
@@ -595,37 +616,29 @@ describe Ffmprb do
       end
 
       it "should duck the overlay sound wrt the main sound" do
-        Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |block_size|
-          begin
-            Ffmprb::Util::ThreadedIoBuffer.block_size = 8*1024
+        # NOTE non-streaming output file requires additional development see #181845
+        Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_stream) do |input1, input2, output1|
 
-            # NOTE non-streaming output file requires additional development see #181845
-            Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_stream) do |input1, input2, output1|
-
-              in1 = input(input1)
-              in2 = input(input2)
-              output(output1) do
-                lay in1.cut(to: 10), transition: {blend: 1}
-                overlay in2.cut(from: 4).loop, duck: :audio
-              end
-
-            end
-
-            @av_out_stream.sample at: 2 do |snap, sound|
-              check_white! pixel_data(snap, 100, 100)
-              expect(wave_data(sound).frequency).to be_between(NOTES.G6, NOTES.B6)
-            end
-
-            @av_out_stream.sample at: 6 do |snap, sound|
-              check_black! pixel_data(snap, 100, 100)
-              expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
-            end
-
-            expect(@av_out_stream.length).to be_approximately 10
-          ensure
-            Ffmprb::Util::ThreadedIoBuffer.block_size = block_size
+          in1 = input(input1)
+          in2 = input(input2)
+          output(output1) do
+            lay in1.cut(to: 10), transition: {blend: 1}
+            overlay in2.cut(from: 4).loop, duck: :audio
           end
+
         end
+
+        @av_out_stream.sample at: 2 do |snap, sound|
+          check_white! pixel_data(snap, 100, 100)
+          expect(wave_data(sound).frequency).to be_between(NOTES.G6, NOTES.B6)
+        end
+
+        @av_out_stream.sample at: 6 do |snap, sound|
+          check_black! pixel_data(snap, 100, 100)
+          expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
+        end
+
+        expect(@av_out_stream.length).to be_approximately 10
       end
 
       it "should duck some overlay sound wrt some main sound" do

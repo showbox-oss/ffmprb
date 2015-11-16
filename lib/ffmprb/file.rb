@@ -174,7 +174,7 @@ module Ffmprb
     end
 
     def image_extname?
-      extname =~ /^\.(jpe?g|png|y4m)$/i
+      extname =~ /^\.(jpe?g|a?png|y4m)$/i
     end
 
     def sound_extname?
