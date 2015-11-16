@@ -9,6 +9,8 @@ module Ffmprb
       attr_accessor :duck_audio_transition_length,
         :duck_audio_transition_in_start, :duck_audio_transition_out_start
 
+      attr_accessor :input_options
+
       attr_accessor :output_video_resolution
       attr_accessor :output_video_fps
       attr_accessor :output_audio_encoder
@@ -92,8 +94,8 @@ module Ffmprb
       fail Error, "Unknown options: #{opts}"  unless opts.empty?
     end
 
-    def input(io)
-      Input.new(io, self).tap do |inp|
+    def input(io, **opts)
+      Input.new(io, self, **self.class.input_options.merge(opts)).tap do |inp|
         @inputs << inp
       end
     end

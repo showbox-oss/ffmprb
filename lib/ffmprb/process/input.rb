@@ -24,9 +24,10 @@ module Ffmprb
       attr_accessor :io
       attr_reader :process
 
-      def initialize(io, process)
+      def initialize(io, process, **opts)
         @io = self.class.resolve(io)
         @process = process
+        @opts = opts
       end
 
 
@@ -36,8 +37,13 @@ module Ffmprb
 
 
       def options
-        defaults = %w[-noautorotate -thread_queue_size 32 -i]  # TODO parameterise
-        defaults + [io.path]
+        opts = []
+        @opts.map do |name, value|
+          next  unless value
+          opts << "-#{name}"
+          opts << value  unless value == true
+        end
+        opts << '-i' << io.path
       end
 
       def filters_for(lbl, video:, audio:)
