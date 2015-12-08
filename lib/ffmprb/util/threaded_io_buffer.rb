@@ -5,7 +5,8 @@ module Ffmprb
     # TODO the events mechanism is currently unused (and commented out) => synchro mechanism not needed
     # XXX *partially* specc'ed in file_spec
     class ThreadedIoBuffer
-      # include Synchro
+      include MonitorMixin
+      # XXX include Synchro
 
       class << self
 
@@ -23,13 +24,14 @@ module Ffmprb
       #      the labdas must be timeout-interrupt-safe (since they are wrapped in timeout blocks)
       # NOTE both ios are being opened and closed as soon as possible
       def initialize(input, *outputs)  # XXX SPEC ME!!! multiple outputs!!
+        super()  # NOTE for the monitor, apparently
 
         @input = input
-        @outputs = outputs.inject({}) do |hash, out|
-          hash[out] = SizedQueue.new(self.class.blocks_max)
-          hash
+        @outputs = {}
+        outputs.each do |out|
+          @outputs[out] = SizedQueue.new(self.class.blocks_max)
         end
-        @stat_blocks_max = 0
+        @stats = {blocks_max: 0, bytes_in: 0, bytes_out: 0}
         @terminate = false
         # @events = {}
 
@@ -40,7 +42,9 @@ module Ffmprb
             init_writer! output
           end
 
-          Thread.join_children!
+          Thread.join_children!.tap do
+            Ffmprb.logger.debug "ThreadedIoBuffer terminated successfully (#{@stats})"
+          end
         end
       end
       #
@@ -60,7 +64,7 @@ module Ffmprb
       # handle_synchronously :once
       #
       # def reader_done!
-      #   Ffmprb.logger.debug "ThreadedIoBuffer reader terminated (blocks max: #{@stat_blocks_max})"
+      #   Ffmprb.logger.debug "ThreadedIoBuffer reader terminated (#{@stats})"
       #   fire! :reader_done
       # end
       #
@@ -72,7 +76,7 @@ module Ffmprb
       #   fire! :timeout
       # end
 
-      protected
+      # protected
       #
       # def fire!(event)
       #   wait_for_handler!
@@ -84,9 +88,6 @@ module Ffmprb
       # end
       # handle_synchronously :fire!
       #
-      def blocks_count
-        @outputs.values.map(&:size).max
-      end
 
       private
 
@@ -112,16 +113,16 @@ module Ffmprb
         Thread.new("buffer reader") do
           begin
             while s = reader_input!.read(self.class.block_size)
+              synchronize do
+                @stats[:bytes_in] += s.length
+              end
               begin
-                Timeout.timeout(self.class.timeout) do
-                  output_enq s
-                end
+                output_enq s  # NOTE fails fast and unrecoverably
               rescue Timeout::Error  # NOTE the queue is probably overflown
                 @terminate = Error.new("The reader has failed with timeout while queuing")
                 # timeout!
-                fail Error, "Looks like we're stuck (#{timeout}s idle) with #{self.class.blocks_max}x#{self.class.block_size}B blocks (buffering #{reader_input!.path}->...)..."
+                fail Error, "Looks like we're stuck (#{self.class.timeout}s idle) with #{self.class.blocks_max}x#{self.class.block_size}B blocks (buffering #{reader_input!.path}->...)..."
               end
-              @stat_blocks_max = blocks_count  if blocks_count > @stat_blocks_max
             end
             @terminate = true
             output_enq nil
@@ -132,7 +133,7 @@ module Ffmprb
               Ffmprb.logger.error "ThreadedIoBuffer input closing error: #{$!.message}"
             end
             # reader_done!
-            Ffmprb.logger.debug "ThreadedIoBuffer reader terminated (blocks max: #{@stat_blocks_max})"
+            Ffmprb.logger.debug "ThreadedIoBuffer reader terminated (#{@stats})"
           end
         end
       end
@@ -168,6 +169,9 @@ module Ffmprb
                 begin
                   output_io = writer_output!(output)
                   written = output_io.write_nonblock(s)  if output  # NOTE will only be nil if @terminate is an exception
+                  synchronize do
+                    @stats[:bytes_out] += written
+                  end
                   break  if written == s.length  # NOTE kinda optimisation
                   s = s[written..-1]
                 rescue Errno::EAGAIN, Errno::EWOULDBLOCK
@@ -191,7 +195,7 @@ module Ffmprb
             rescue
               Ffmprb.logger.error "ThreadedIoBuffer output closing error: #{$!.message}"
             end
-            Ffmprb.logger.debug "ThreadedIoBuffer writer terminated (blocks max: #{@stat_blocks_max})"
+            Ffmprb.logger.debug "ThreadedIoBuffer writer terminated (#{@stats})"
           end
         end
       end
@@ -203,7 +207,13 @@ module Ffmprb
 
       def output_enq(item)
         @outputs.values.each do |q|
-          q.enq item
+          Timeout.timeout(self.class.timeout) do
+            q.enq item
+          end
+          blocks = q.length
+          synchronize do
+            @stats[:blocks_max] = blocks  if blocks > @stats[:blocks_max]
+          end
         end
       end
 
