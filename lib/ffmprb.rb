@@ -1,5 +1,6 @@
 require 'logger'
 require 'ostruct'
+require 'timeout'
 
 # IMPORTANT NOTE ffmprb uses threads internally, however, it is not "thread-safe"
 

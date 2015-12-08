@@ -9,13 +9,8 @@ module Ffmprb
         def resolve(io)
           return io  unless io.is_a? String
 
-          case io
-          when /^\/\w/
-            File.open(io).tap do |file|
-              Ffmprb.logger.warn "Input file does no exist (#{file.path}), will probably fail"  unless file.exist?
-            end
-          else
-            fail Error, "Cannot resolve input: #{io}"
+          File.open(io).tap do |file|
+            Ffmprb.logger.warn "Input file does no exist (#{file.path}), will probably fail"  unless file.exist?
           end
         end
 
