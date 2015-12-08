@@ -324,13 +324,8 @@ module Ffmprb
       def resolve(io)
         return io  unless io.is_a? String
 
-        case io
-        when /^\/\w/
-          File.create(io).tap do |file|
-            Ffmprb.logger.warn "Output file exists (#{file.path}), will probably overwrite"  if file.exist?
-          end
-        else
-          fail Error, "Cannot resolve output: #{io}"
+        File.create(io).tap do |file|
+          Ffmprb.logger.warn "Output file exists (#{file.path}), will probably overwrite"  if file.exist?
         end
       end
 
