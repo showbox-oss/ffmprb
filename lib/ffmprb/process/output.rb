@@ -6,8 +6,18 @@ module Ffmprb
 
       class << self
 
-        def audio_cmd_options(audio=Process.output_audio_options)
-          audio ||= {}
+        # XXX check for unknown options
+
+        def video_cmd_options(video=nil)
+          video = Process.output_video_options.merge(video.to_h || {})
+          [].tap do |options|
+            options.concat %W[-c:v #{video[:encoder]}]  if video[:encoder]
+            options.concat %W[-pix_fmt #{video[:pixel_format]}]  if video[:pixel_format]
+          end
+        end
+
+        def audio_cmd_options(audio=nil)
+          audio = Process.output_audio_options.merge(audio.to_h || {})
           [].tap do |options|
             options.concat %W[-c:a #{audio[:encoder]}]  if audio[:encoder]
           end
@@ -278,6 +288,7 @@ module Ffmprb
           channel_lbls.each do |channel_lbl|
             options << '-map' << "[#{channel_lbl}]"
           end
+          options.concat self.class.video_cmd_options(channel :video)  if channel? :video
           options.concat self.class.audio_cmd_options(channel :audio)  if channel? :audio
           options << io.path
         end
