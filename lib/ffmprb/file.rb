@@ -8,6 +8,8 @@ module Ffmprb
 
     class << self
 
+      attr_accessor :image_extname_regex, :sound_extname_regex, :movie_extname_regex
+
       def threaded_buffered_fifo(extname='.tmp')
         input_fifo_file = temp_fifo(extname)
         output_fifo_file = temp_fifo(extname)
@@ -84,6 +86,18 @@ module Ffmprb
         }
       end
 
+      def image?(extname)
+        extname =~ image_extname_regex
+      end
+
+      def sound?(extname)
+        extname =~ sound_extname_regex
+      end
+
+      def movie?(extname)
+        extname =~ movie_extname_regex
+      end
+
     end
 
 
@@ -112,9 +126,9 @@ module Ffmprb
     def channel?(medium)
       case medium
       when :video
-        image_extname? || movie_extname?
+        self.class.image?(extname) || self.class.movie?(extname)
       when :audio
-        sound_extname? || movie_extname?
+        self.class.sound?(extname) || self.class.movie?(extname)
       end
     end
 
@@ -171,18 +185,6 @@ module Ffmprb
       @probe = JSON.parse(Util::ffprobe *cmd).tap do |probe|
         fail Error, "This doesn't look like a ffprobable file"  unless probe['streams']
       end
-    end
-
-    def image_extname?
-      extname =~ /^\.(jpe?g|a?png|y4m)$/i
-    end
-
-    def sound_extname?
-      extname =~ /^\.(mp3|wav)$/i
-    end
-
-    def movie_extname?
-      extname =~ /^\.(mp4|flv)$/i
     end
 
   end

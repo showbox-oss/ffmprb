@@ -1,5 +1,9 @@
 module Ffmprb
 
+  File.image_extname_regex = /^\.(jpe?g|a?png|y4m)$/i
+  File.sound_extname_regex = /^\.(mp3|wav)$/i
+  File.movie_extname_regex = /^\.(mp4|flv|mov)$/i
+
   Filter.silence_noise_max_db = -40
 
   Process.duck_audio_silent_min = 3
