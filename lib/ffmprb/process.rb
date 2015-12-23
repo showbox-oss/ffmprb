@@ -91,7 +91,7 @@ module Ffmprb
       self.timeout = opts.delete(:timeout) || self.class.timeout
 
       self.ignore_broken_pipe = opts.delete(:ignore_broken_pipe)
-      fail Error, "Unknown options: #{opts}"  unless opts.empty?
+      fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
     end
 
     def input(io, **opts)

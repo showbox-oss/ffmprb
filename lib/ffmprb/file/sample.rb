@@ -32,7 +32,7 @@ module Ffmprb
           audio.remove  if audio
           Ffmprb.logger.debug "Removed sample files"
         rescue
-          Ffmprb.logger.warn "Error removing sample files: #{$!.message}"
+          Ffmprb.logger.warn "#{$!.class.name} removing sample files: #{$!.message}"
         end
       end
     end
