@@ -100,10 +100,8 @@ module Ffmprb
       end
     end
 
-    def temp_input(extname)  # XXX SPEC ME
-      input(nil).tap do |inp|
-        inp.temporise! extname
-      end
+    def temp_input(extname)
+      input File::TempFifo.new extname
     end
 
     def input_label(input)
@@ -114,9 +112,9 @@ module Ffmprb
       Output.new(io, self,
         video: channel_params(video, self.class.output_video_options),
         audio: channel_params(audio, self.class.output_audio_options)
-      ).tap do |out|
-        @outputs << out
-        out.instance_exec &blk  if blk
+      ).tap do |outp|
+        @outputs << outp
+        outp.instance_exec &blk  if blk
       end
     end
 

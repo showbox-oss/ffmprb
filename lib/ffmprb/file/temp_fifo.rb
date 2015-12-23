@@ -16,6 +16,10 @@ module Ffmprb
         end
       end
 
+      private
+
+      def path!; path; end
+
     end
 
   end

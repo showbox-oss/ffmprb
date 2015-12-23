@@ -330,16 +330,6 @@ module Ffmprb
         !!channel(medium)
       end
 
-      protected
-
-      def resolve(io)
-        return io  unless io.is_a? String
-
-        File.create(io).tap do |file|
-          Ffmprb.logger.warn "Output file exists (#{file.path}), will probably overwrite"  if file.exist?
-        end
-      end
-
       private
 
       def reels_channel?(medium)

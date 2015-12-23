@@ -28,8 +28,8 @@ module Ffmprb
         yield *[video || nil, audio || nil].compact
       ensure
         begin
-          video.remove  if video
-          audio.remove  if audio
+          video.unlink  if video
+          audio.unlink  if audio
           Ffmprb.logger.debug "Removed sample files"
         rescue
           Ffmprb.logger.warn "#{$!.class.name} removing sample files: #{$!.message}"

@@ -48,8 +48,8 @@ module Ffmprb
 
           buff_raw_io = File.temp_fifo(src_io.extname)
           Util::ThreadedIoBuffer.new(
-            File.async_opener(buff_raw_io, 'r'),
-            File.async_opener(raw.io, 'w')
+            File.opener(buff_raw_io, 'r'),
+            File.opener(raw.io, 'w')
           )
 
           Ffmprb.logger.debug "Preprocessed looping input will be #{dst_io.path} and raw input copy will go through #{buff_raw_io.path} to #{raw.io.path}..."
@@ -72,8 +72,8 @@ module Ffmprb
           buff_ios = (0..times).map{File.temp_fifo src_io.extname}
           Ffmprb.logger.debug "Preprocessed #{dst_io.path} will be teed to #{buff_ios.map(&:path).join '; '}"
           Util::ThreadedIoBuffer.new(
-            File.async_opener(dst_io, 'r'),
-            *buff_ios.map{|io| File.async_opener io, 'w'}
+            File.opener(dst_io, 'r'),
+            *buff_ios.map{|io| File.opener io, 'w'}
           )
 
           Ffmprb.logger.debug "Concatenation of #{buff_ios.map(&:path).join '; '} will go to #{@aux_input.io.path} to be fed to this process"
