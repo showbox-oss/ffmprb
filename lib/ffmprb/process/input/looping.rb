@@ -18,8 +18,7 @@ module Ffmprb
 
           @raw = unfiltered
           @raw = @raw.unfiltered  while @raw.respond_to? :unfiltered
-          @src_io = @raw.io
-          @raw.temporise!
+          @src_io = @raw.temporise_io!
           @aux_input = @raw.process.temp_input(@src_io.extname)
         end
 

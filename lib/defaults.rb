@@ -14,7 +14,8 @@ module Ffmprb
   Process.duck_audio_volume_lo = 0.1
   Process.timeout = 30
 
-  Process.input_options = {noautorotate: true}
+  Process.input_video_auto_rotate = false
+  Process.input_video_fps = nil  # NOTE the documented ffmpeg default is 25
 
   Process.output_video_resolution = CGA
   Process.output_video_fps = 16

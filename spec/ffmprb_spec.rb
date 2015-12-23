@@ -131,7 +131,7 @@ describe Ffmprb do
 
         Ffmprb.process(@av_out_file) do |file_output|
 
-          in1 = input(tmp_papng, default_fps: 25)
+          in1 = input(tmp_papng, video: {fps: 25})
           output(file_output, audio: false) do  # XXX
             roll in1
           end

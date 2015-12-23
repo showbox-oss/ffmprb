@@ -9,7 +9,8 @@ module Ffmprb
       attr_accessor :duck_audio_transition_length,
         :duck_audio_transition_in_start, :duck_audio_transition_out_start
 
-      attr_accessor :input_options
+      attr_accessor :input_video_auto_rotate
+      attr_accessor :input_video_fps
 
       attr_accessor :output_video_resolution
       attr_accessor :output_video_fps
@@ -29,10 +30,20 @@ module Ffmprb
         end
       end
 
+      def input_video_options
+        {
+          auto_rotate: input_video_auto_rotate,
+          fps: input_video_fps
+        }
+      end
+      def input_audio_options
+        {
+        }
+      end
       def output_video_options
         {
-          resolution: output_video_resolution,
-          fps: output_video_fps
+          fps: output_video_fps,
+          resolution: output_video_resolution
         }
       end
       def output_audio_options
@@ -94,8 +105,11 @@ module Ffmprb
       fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
     end
 
-    def input(io, **opts)
-      Input.new(io, self, **self.class.input_options.merge(opts)).tap do |inp|
+    def input(io, video: true, audio: true)
+      Input.new(io, self,
+        video: channel_params(video, self.class.input_video_options),
+        audio: channel_params(audio, self.class.input_audio_options)
+      ).tap do |inp|
         @inputs << inp
       end
     end
@@ -140,19 +154,19 @@ module Ffmprb
     private
 
     def command
-      input_options + filter_options + output_options
+      input_args + filter_args + output_args
     end
 
-    def input_options
-      @inputs.map(&:options).flatten(1)
+    def input_args
+      @inputs.map(&:args).flatten(1)
     end
 
-    def filter_options
-      Filter.complex_options @outputs.map(&:filters).reduce(:+)
+    def filter_args
+      Filter.complex_args @outputs.map(&:filters).reduce(:+)
     end
 
-    def output_options
-      @outputs.map(&:options).flatten(1)
+    def output_args
+      @outputs.map(&:args).flatten(1)
     end
 
     def channel_params(value, default)

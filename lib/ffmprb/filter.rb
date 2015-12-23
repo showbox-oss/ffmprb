@@ -259,7 +259,7 @@ module Ffmprb
         color_source '0xFFFFFF@1', duration, resolution, fps, output
       end
 
-      def complex_options(*filters)
+      def complex_args(*filters)
         ['-filter_complex', filters.join('; ')]  unless filters.empty?
       end
 
