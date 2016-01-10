@@ -4,7 +4,8 @@ module Ffmprb
 
     class Input
 
-      def loop(times=31)
+      def loop(times=Util.ffmpeg_inputs_max)
+        Ffmprb.logger.warn "Looping more than #{Util.ffmpeg_inputs_max} times is 'unstable': either use double looping or ask for this feature"  if times > Util.ffmpeg_inputs_max
         Looping.new self, times
       end
 

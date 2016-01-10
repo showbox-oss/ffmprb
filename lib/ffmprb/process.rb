@@ -110,6 +110,7 @@ module Ffmprb
         video: channel_params(video, self.class.input_video_options),
         audio: channel_params(audio, self.class.input_audio_options)
       ).tap do |inp|
+        fail Error, "Too many inputs to the process, try breaking it down somehow"  if @inputs.size > Util.ffmpeg_inputs_max
         @inputs << inp
       end
     end
@@ -158,15 +159,20 @@ module Ffmprb
     end
 
     def input_args
-      @inputs.map(&:args).flatten(1)
+      filter_args  # NOTE must run first
+      @input_args ||= @inputs.map(&:args).reduce(:+)
     end
 
+    # NOTE must run first
     def filter_args
-      Filter.complex_args @outputs.map(&:filters).reduce(:+)
+      @filter_args ||= Filter.complex_args(
+        @outputs.map(&:filters).reduce(:+)
+      )
     end
 
     def output_args
-      @outputs.map(&:args).flatten(1)
+      filter_args  # NOTE must run first
+      @output_args ||= @outputs.map(&:args).reduce(:+)
     end
 
     def channel_params(value, default)

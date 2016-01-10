@@ -21,9 +21,10 @@ module Ffmprb
   Process.output_video_fps = 16
   Process.output_audio_encoder = 'libmp3lame'
 
-  Util.ffmpeg_cmd = %w[ffmpeg -y]
-  Util.ffprobe_cmd = ['ffprobe']
   Util.cmd_timeout = 30
+  Util.ffmpeg_cmd = %w[ffmpeg -y]
+  Util.ffmpeg_inputs_max = 31
+  Util.ffprobe_cmd = ['ffprobe']
 
   Util::ThreadedIoBuffer.blocks_max = 1024
   Util::ThreadedIoBuffer.block_size = 64*1024

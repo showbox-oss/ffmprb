@@ -107,6 +107,22 @@ describe Ffmprb do
 
     end
 
+    it "should fail on too much inputs" do
+      too_much = 99
+      expect {
+        Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
+
+          inps = (0..100).map{input file_input}
+          output file_output do
+            inps.each do |inp|
+              roll inp
+            end
+          end
+
+        end
+      }.to raise_error Ffmprb::Error
+    end
+
     it "should transcode" do
       Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
 
