@@ -622,8 +622,8 @@ describe Ffmprb do
           in1 = input(input1)
           in2 = input(input2)
           output(output1) do
-            lay in1.cut(to: 10), transition: {blend: 1}
-            overlay in2.cut(from: 4).loop, duck: :audio
+            lay in1, transition: {blend: 1}
+            overlay in2.loop, duck: :audio
           end
 
         end
