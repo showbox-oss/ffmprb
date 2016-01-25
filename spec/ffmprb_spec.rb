@@ -638,7 +638,7 @@ describe Ffmprb do
           expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
         end
 
-        expect(@av_out_stream.length).to be_approximately 10
+        expect(@av_out_stream.length).to be_approximately 16
       end
 
       it "should duck some overlay sound wrt some main sound" do
