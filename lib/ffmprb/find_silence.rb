@@ -29,7 +29,7 @@ module Ffmprb
 
     private
 
-    SILENCE_DETECT_REGEX = /\[silencedetect\s.*\]\s*silence_(\w+):\s*(\d+\.?d*)/
+    SILENCE_DETECT_REGEX = /\[silencedetect\s.*\]\s*silence_(\w+):\s*(\d+\.?\d*)/
 
     def find_silence_detect_options
       Filter.complex_options Filter.silencedetect
