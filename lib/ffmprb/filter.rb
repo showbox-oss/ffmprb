@@ -242,6 +242,7 @@ module Ffmprb
         prev_vol = volume[prev_at] || 1.0
         exp = "#{volume[volume.keys.last]}"
         volume.each do |at, vol|
+          next if at == prev_at
           vol_exp =
             if (vol - prev_vol).abs < 0.001
               vol
