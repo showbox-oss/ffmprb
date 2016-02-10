@@ -94,7 +94,7 @@ describe Ffmprb::File do
               end
             end
           end
-          expect{Ffmprb::Util::Thread.join_children!}.to raise_error StandardError
+          expect{Ffmprb::Util::Thread.join_children!}.to raise_error Ffmprb::Error
         ensure
           Ffmprb::Util::ThreadedIoBuffer.timeout = timeout
         end
