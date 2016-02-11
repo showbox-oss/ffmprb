@@ -119,7 +119,7 @@ module Ffmprb
               rescue Timeout::Error  # NOTE the queue is probably overflown
                 @terminate = Error.new("The reader has failed with timeout while queuing")
                 # timeout!
-                fail Error, "Looks like we're stuck (#{timeout}s idle) with #{self.class.blocks_max}x#{self.class.block_size}B blocks (buffering #{reader_input!.path}->...)..."
+                fail Error, "Looks like we're stuck (#{self.class.timeout}s idle) with #{self.class.blocks_max}x#{self.class.block_size}B blocks (buffering #{reader_input!.path}->...)..."
               end
               @stat_blocks_max = blocks_count  if blocks_count > @stat_blocks_max
             end
