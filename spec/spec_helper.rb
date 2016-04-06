@@ -6,12 +6,7 @@ RSpec.configure do |config|
 
   # NOTE generated media files
 
-  # XXX https://github.com/rspec/rspec-core/issues/1031#issuecomment-120706058
-  # config.around :all do |group|
-  #   ...
-  # end
-
-  config.before :all do
+  config.around :all do |example|
     @av_file_c_gor_9 = Ffmprb::File.temp('.mp4')
     Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options('color=red:r=60:d=9:s=320x240 [red]', 'color=green:r=60:d=9:s=280x200 [green]', '[red] [green] overlay=20:20', "sine=#{NOTES.C6}:d=9"), *Ffmprb::Process::Output.audio_cmd_options, @av_file_c_gor_9.path
     @av_file_e_bow_9 = Ffmprb::File.temp('.flv')
@@ -25,15 +20,17 @@ RSpec.configure do |config|
     Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options('color=red:r=30:d=6:s=320x240, setpts=PTS-STARTPTS [red]', 'color=green:r=30:d=6:s=280x200 [green]', '[red] [green] overlay=20:20'), '-pix_fmt', 'yuv420p', @v_file_6.path
     @a_file_g_16 = Ffmprb::File.temp('.mp3')
     Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_options("sine=#{NOTES.G6}:d=16"), @a_file_g_16.path
-  end
 
-  config.after :all do
-    @av_file_c_gor_9.remove
-    @av_file_e_bow_9.remove
-    @av_file_btn_wtb_16.remove
-    # @av_file_ro7_14.remove
-    @v_file_6.remove
-    @a_file_g_16.remove
+    begin
+      example.run
+    ensure
+      @av_file_c_gor_9.remove
+      @av_file_e_bow_9.remove
+      @av_file_btn_wtb_16.remove
+      # @av_file_ro7_14.remove
+      @v_file_6.remove
+      @a_file_g_16.remove
+    end
   end
 
 end
