@@ -27,5 +27,4 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rake', '>= 11.1.2'
   spec.add_development_dependency 'rmagick', '>= 2.15.4'
   spec.add_development_dependency 'ruby-sox', '>= 0.0.3'
-  spec.add_development_dependency 'rspec_around_all', '>= 0.2.0'  # NOTE https://github.com/rspec/rspec-core/issues/1031#issuecomment-120706058
 end

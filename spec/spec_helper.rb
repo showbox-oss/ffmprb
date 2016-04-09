@@ -6,7 +6,11 @@ RSpec.configure do |config|
 
   # NOTE generated media files
 
-  config.around :all do |example|
+  # XXX https://github.com/rspec/rspec-core/issues/1031#issuecomment-121144883
+  # the workaround/microgem doesn't work this far
+  # config.around :all do |example|
+
+  config.before :all do
     @sample_files = []
     @sample_files << (@av_file_c_gor_9 = Ffmprb::File.temp('.mp4'))
     Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_args('color=red:r=60:d=9:s=320x240 [red]', 'color=green:r=60:d=9:s=280x200 [green]', '[red] [green] overlay=20:20', "sine=#{NOTES.C6}:d=9"), *Ffmprb::Process::Output.audio_args, @av_file_c_gor_9.path
@@ -21,13 +25,10 @@ RSpec.configure do |config|
     Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_args('color=red:r=30:d=6:s=320x240, setpts=PTS-STARTPTS [red]', 'color=green:r=30:d=6:s=280x200 [green]', '[red] [green] overlay=20:20'), '-pix_fmt', 'yuv420p', @v_file_6.path
     @sample_files << (@a_file_g_16 = Ffmprb::File.temp('.mp3'))
     Ffmprb::Util.ffmpeg *Ffmprb::Filter.complex_args("sine=#{NOTES.G6}:d=16"), @a_file_g_16.path
-
-    begin
-      example.run
-    ensure
-      @sample_files.each &:unlink
-      @sample_files = nil
-    end
+  end
+  config.after :all do
+    @sample_files.each &:unlink
+    @sample_files = nil
   end
 
 end
