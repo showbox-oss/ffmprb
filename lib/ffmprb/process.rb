@@ -72,17 +72,21 @@ module Ffmprb
             silence.each do |silent|
               next  if silent.end_at && silent.start_at && (silent.end_at - silent.start_at) < silent_min
 
-              transition_in_start = silent.start_at + Process.duck_audio_transition_in_start
-              ducked_overlay_volume.merge!(
-                [transition_in_start, 0.0].max => volume_lo,
-                (transition_in_start + Process.duck_audio_transition_length) => volume_hi
-              )  if silent.start_at
+              if silent.start_at
+                transition_in_start = silent.start_at + Process.duck_audio_transition_in_start
+                ducked_overlay_volume.merge!(
+                  [transition_in_start, 0.0].max => volume_lo,
+                  (transition_in_start + Process.duck_audio_transition_length) => volume_hi
+                )
+              end
 
-              transition_out_start = silent.end_at + Process.duck_audio_transition_out_start
-              ducked_overlay_volume.merge!(
-                [transition_out_start, 0.0].max => volume_hi,
-                (transition_out_start + Process.duck_audio_transition_length) => volume_lo
-              )  if silent.end_at
+              if silent.end_at
+                transition_out_start = silent.end_at + Process.duck_audio_transition_out_start
+                ducked_overlay_volume.merge!(
+                  [transition_out_start, 0.0].max => volume_hi,
+                  (transition_out_start + Process.duck_audio_transition_length) => volume_lo
+                )
+              end
             end
             overlay in_over.volume ducked_overlay_volume
 
