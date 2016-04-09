@@ -193,14 +193,18 @@ module Ffmprb
 
         segments.compact!
 
-        lbl_out = "o#{idx}o"
+        lbl_out = segments[0]
 
-        @filters.concat(
-          Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
-        )  if channel?(:video)
-        @filters.concat(
-          Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
-        )  if channel?(:audio)
+        if segments.size > 1
+          lbl_out = "o#{idx}o"
+
+          @filters.concat(
+            Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
+          )  if channel?(:video)
+          @filters.concat(
+            Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
+          )  if channel?(:audio)
+        end
 
         # Overlays
 
