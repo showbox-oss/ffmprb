@@ -62,7 +62,7 @@ describe Ffmprb::File do
 
           File.open(@fifo[0].path, 'w') do |file_out|
             File.open(@fifo[1].path, 'r') do |file_in|
-              Timeout.timeout(5) do
+              Timeout.timeout(8) do
                 thr = Thread.new do
                   file_out.write(TST_STR_6K * 512)
                   file_out.close
@@ -94,7 +94,7 @@ describe Ffmprb::File do
               end
             end
           end
-          expect{Ffmprb::Util::Thread.join_children!}.to raise_error StandardError
+          expect{Ffmprb::Util::Thread.join_children!}.to raise_error Ffmprb::Error
         ensure
           Ffmprb::Util::ThreadedIoBuffer.timeout = timeout
         end

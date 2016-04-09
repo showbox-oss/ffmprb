@@ -1,7 +1,3 @@
-# require 'ffmprb/util/synchro'
-require 'ffmprb/util/thread'
-require 'ffmprb/util/threaded_io_buffer'
-
 require 'open3'
 
 module Ffmprb
@@ -12,7 +8,7 @@ module Ffmprb
 
     class << self
 
-      attr_accessor :ffmpeg_cmd, :ffprobe_cmd
+      attr_accessor :ffmpeg_cmd, :ffmpeg_inputs_max, :ffprobe_cmd
       attr_accessor :cmd_timeout
 
       def ffprobe(*args, limit: nil, timeout: cmd_timeout)
@@ -138,3 +134,7 @@ module Ffmprb
   end
 
 end
+
+# require 'ffmprb/util/synchro'
+require_relative 'util/thread'
+require_relative 'util/threaded_io_buffer'

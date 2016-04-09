@@ -4,29 +4,21 @@ require 'tempfile'
 
 module Ffmprb
 
-  class File
+  class File  # NOTE I would rather rename it to Stream at the moment
 
     class << self
 
-      def threaded_buffered_fifo(extname='.tmp')
-        input_fifo_file = temp_fifo(extname)
-        output_fifo_file = temp_fifo(extname)
-        Ffmprb.logger.debug "Opening #{input_fifo_file.path}>#{output_fifo_file.path} for buffering"
-        Util::Thread.new do
-          begin
-            Util::ThreadedIoBuffer.new async_opener(input_fifo_file, 'r'), async_opener(output_fifo_file, 'w')
-            Util::Thread.join_children!
-            Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} ended"
-          ensure
-            input_fifo_file.remove  if input_fifo_file
-            output_fifo_file.remove  if output_fifo_file
-          end
-        end
-        Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} started"
+      # NOTE careful when subclassing, it doesn't inherit the attr values
+      attr_accessor :image_extname_regex, :sound_extname_regex, :movie_extname_regex
 
-        # TODO see threaded_io_buffer's XXXs: yield buff  if block_given?
-
-        [input_fifo_file, output_fifo_file]
+      # NOTE must be timeout-safe
+      def opener(file, mode=nil)
+        ->{
+          path = file.respond_to?(:path)? file.path : file
+          mode ||= file.respond_to?(mode)? file.mode.to_s[0] : 'r'
+          Ffmprb.logger.debug "Trying to open #{path} (for #{mode}-buffering or something)"
+          ::File.open(path, mode)
+        }
       end
 
       def create(path)
@@ -36,14 +28,15 @@ module Ffmprb
       end
 
       def open(path)
-        new(path: (path.respond_to?(:path)? path.path : path), mode: :read).tap do |file|
+        new(path: path, mode: :read).tap do |file|
           Ffmprb.logger.debug "Opened file with path: #{file.path}"
         end
       end
 
       def temp(extname)
         file = create(Tempfile.new(['', extname]))
-        Ffmprb.logger.debug "Created temp file with path: #{file.path}"
+        path = file.path
+        Ffmprb.logger.debug "Created temp file with path: #{path}"
 
         return file  unless block_given?
 
@@ -51,24 +44,29 @@ module Ffmprb
           yield file
         ensure
           begin
-            FileUtils.remove_entry file.path
+            file.unlink
           rescue
-            Ffmprb.logger.warn "Error removing temp file with path #{file.path}: #{$!.message}"
+            Ffmprb.logger.warn "#{$!.class.name} removing temp file with path #{path}: #{$!.message}"
           end
-          Ffmprb.logger.debug "Removed temp file with path: #{file.path}"
+          Ffmprb.logger.debug "Removed temp file with path: #{path}"
         end
       end
 
       def temp_fifo(extname='.tmp', &blk)
-        fifo_file = create(temp_fifo_path extname)
-        ::File.mkfifo fifo_file.path
+        fifo_file = TempFifo.new(extname)
 
         return fifo_file  unless block_given?
 
+        path = fifo_file.path
         begin
           yield fifo_file
         ensure
-          fifo_file.remove
+          begin
+            fifo_file.unlink
+          rescue
+            Ffmprb.logger.warn "#{$!.class.name} removing temp file with path #{path}: #{$!.message}"
+          end
+          Ffmprb.logger.debug "Removed temp file with path: #{path}"
         end
       end
 
@@ -76,23 +74,28 @@ module Ffmprb
         ::File.join Dir.tmpdir, Dir::Tmpname.make_tmpname('', 'p' + extname)
       end
 
-      # NOTE must be timeout-safe
-      def async_opener(file, mode)
-        ->{
-          Ffmprb.logger.debug "Trying to open #{file.path} for #{mode}-buffering"
-          ::File.open(file.path, mode)
-        }
+      def image?(extname)
+        !!(extname =~ File.image_extname_regex)
+      end
+
+      def sound?(extname)
+        !!(extname =~ File.sound_extname_regex)
+      end
+
+      def movie?(extname)
+        !!(extname =~ File.movie_extname_regex)
       end
 
     end
 
+    attr_reader :mode
 
     def initialize(path:, mode:)
-      @path = path
-      @path.close  if @path && @path.respond_to?(:close)  # NOTE specially for temp files
-      path!  # NOTE early (exception) raiser
       @mode = mode.to_sym
       fail Error, "Open for read, create for write, ??? for #{@mode}"  unless %i[read write].include?(@mode)
+      @path = path
+      @path.close  if @path && @path.respond_to?(:close)  # NOTE we operate on closed files
+      path!  # NOTE early (exception) raiser
     end
 
     def path
@@ -106,15 +109,15 @@ module Ffmprb
     end
 
     def extname
-      ::File.extname path
+      @extname ||= ::File.extname(path)
     end
 
     def channel?(medium)
       case medium
       when :video
-        image_extname? || movie_extname?
+        self.class.image?(extname) || self.class.movie?(extname)
       when :audio
-        sound_extname? || movie_extname?
+        self.class.sound?(extname) || self.class.movie?(extname)
       end
     end
 
@@ -147,8 +150,12 @@ module Ffmprb
       ::File.write path, s
     end
 
-    def remove
-      FileUtils.remove_entry path
+    def unlink
+      if path.respond_to? :unlink
+        path.unlink
+      else
+        FileUtils.remove_entry path
+      end
       Ffmprb.logger.debug "Removed file with path: #{path}"
       @path = nil
     end
@@ -156,7 +163,7 @@ module Ffmprb
     private
 
     def path!
-      (  # NOTE specially for temp files
+      (
         @path.respond_to?(:path)? @path.path : @path
       ).tap do |path|
         # TODO ensure readabilty/writability/readiness
@@ -173,20 +180,10 @@ module Ffmprb
       end
     end
 
-    def image_extname?
-      extname =~ /^\.(jpe?g|a?png|y4m)$/i
-    end
-
-    def sound_extname?
-      extname =~ /^\.(mp3|wav)$/i
-    end
-
-    def movie_extname?
-      extname =~ /^\.(mp4|flv)$/i
-    end
-
   end
 
 end
 
 require_relative 'file/sample'
+require_relative 'file/temp_fifo'
+require_relative 'file/threaded_buffered_fifo'

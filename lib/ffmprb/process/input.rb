@@ -7,15 +7,29 @@ module Ffmprb
       class << self
 
         def resolve(io)
-          return io  unless io.is_a? String
+          return io  unless io.is_a? String  # XXX XXX
 
-          case io
-          when /^\/\w/
-            File.open(io).tap do |file|
-              Ffmprb.logger.warn "Input file does no exist (#{file.path}), will probably fail"  unless file.exist?
-            end
-          else
-            fail Error, "Cannot resolve input: #{io}"
+          File.open(io).tap do |file|
+            Ffmprb.logger.warn "Input file does no exist (#{file.path}), will probably fail"  unless file.exist?
+          end
+        end
+
+        # XXX check for unknown options
+
+        def video_args(video=nil)
+          video = Process.input_video_options.merge(video.to_h)
+          [].tap do |args|
+            fps = nil  # NOTE ah, ruby
+            args.concat %W[-noautorotate]  unless video.delete(:auto_rotate)
+            args.concat %W[-r #{fps}]  if (fps = video.delete(:fps))
+            fail "Unknown input video options: #{video}"  unless video.empty?
+          end
+        end
+
+        def audio_args(audio=nil)
+          audio = Process.input_audio_options.merge(audio.to_h)
+          [].tap do |args|
+            fail "Unknown input audio options: #{audio}"  unless audio.empty?
           end
         end
 
@@ -24,10 +38,13 @@ module Ffmprb
       attr_accessor :io
       attr_reader :process
 
-      def initialize(io, process, **opts)
+      def initialize(io, process, video:, audio:)
         @io = self.class.resolve(io)
         @process = process
-        @opts = opts
+        @channels = {
+          video: video && @io.channel?(:video) && OpenStruct.new(video),
+          audio: audio && @io.channel?(:audio) && OpenStruct.new(audio)
+        }
       end
 
 
@@ -36,14 +53,12 @@ module Ffmprb
       end
 
 
-      def options
-        opts = []
-        @opts.map do |name, value|
-          next  unless value
-          opts << "-#{name}"
-          opts << value  unless value == true
+      def args
+        [].tap do |args|
+          args.concat self.class.video_args(channel :video)  if channel? :video
+          args.concat self.class.audio_args(channel :audio)  if channel? :audio
+          args.concat ['-i', io.path]
         end
-        opts << '-i' << io.path
       end
 
       def filters_for(lbl, video:, audio:)
@@ -66,6 +81,10 @@ module Ffmprb
 
       def channel?(medium)
         io.channel? medium
+      end
+
+      def channel(medium)
+        @channels[medium]
       end
 
 

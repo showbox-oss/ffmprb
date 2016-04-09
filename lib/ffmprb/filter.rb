@@ -233,6 +233,7 @@ module Ffmprb
           volume_exp: volume_exp(volume)
       end
 
+      # NOTE supposedly volume list is sorted
       def volume_exp(volume)
         return volume  unless volume.is_a?(Hash)
 
@@ -242,6 +243,7 @@ module Ffmprb
         prev_vol = volume[prev_at] || 1.0
         exp = "#{volume[volume.keys.last]}"
         volume.each do |at, vol|
+          next if at == 0.0
           vol_exp =
             if (vol - prev_vol).abs < 0.001
               vol
@@ -259,7 +261,7 @@ module Ffmprb
         color_source '0xFFFFFF@1', duration, resolution, fps, output
       end
 
-      def complex_options(*filters)
+      def complex_args(*filters)
         ['-filter_complex', filters.join('; ')]  unless filters.empty?
       end
 

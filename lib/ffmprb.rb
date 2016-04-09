@@ -1,5 +1,6 @@
 require 'logger'
 require 'ostruct'
+require 'timeout'
 
 # IMPORTANT NOTE ffmprb uses threads internally, however, it is not "thread-safe"
 
@@ -22,13 +23,13 @@ module Ffmprb
 
       process = Process.new(**opts)
 
-      logger.debug "Starting process with #{args} in #{blk.source_location}"
+      logger.debug "Starting process with #{args} #{opts} in #{blk.source_location}"
 
       process.instance_exec *args, &blk
-      logger.debug "Initialized process with #{args} in #{blk.source_location}"
+      logger.debug "Initialized process with #{args} #{opts} in #{blk.source_location}"
 
       process.run.tap do
-        logger.debug "Finished process with #{args} in #{blk.source_location}"
+        logger.debug "Finished process with #{args} #{opts} in #{blk.source_location}"
       end
     end
     alias :action! :process  # ;)
