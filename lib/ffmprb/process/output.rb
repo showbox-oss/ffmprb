@@ -169,14 +169,18 @@ module Ffmprb
 
         segments.compact!
 
-        lbl_out = "o#{idx}o"
+        lbl_out = segments[0]
 
-        @filters.concat(
-          Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
-        )  if channel?(:video)
-        @filters.concat(
-          Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
-        )  if channel?(:audio)
+        if segments.size > 1
+          lbl_out = "o#{idx}o"
+
+          @filters.concat(
+            Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
+          )  if channel?(:video)
+          @filters.concat(
+            Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
+          )  if channel?(:audio)
+        end
 
         # Overlays
 
@@ -268,21 +272,19 @@ module Ffmprb
       def options
         fail Error, "Must generate filters first."  unless @channel_lbl_ios
 
-        options = []
-
-        io_channel_lbls = {}  # XXX ~~~spaghetti
-        @channel_lbl_ios.each do |channel_lbl, io|
-          (io_channel_lbls[io] ||= []) << channel_lbl
-        end
-        io_channel_lbls.each do |io, channel_lbls|
-          channel_lbls.each do |channel_lbl|
-            options << '-map' << "[#{channel_lbl}]"
+        [].tap do |opts|
+          io_channel_lbls = {}  # XXX ~~~spaghetti
+          @channel_lbl_ios.each do |channel_lbl, io|
+            (io_channel_lbls[io] ||= []) << channel_lbl
           end
-          options.concat self.class.audio_cmd_options(channel :audio)  if channel? :audio
-          options << io.path
+          io_channel_lbls.each do |io, channel_lbls|
+            channel_lbls.each do |channel_lbl|
+              opts << '-map' << "[#{channel_lbl}]"
+            end
+            opts.concat self.class.audio_cmd_options(channel :audio)  if channel? :audio
+            opts << io.path
+          end
         end
-
-        options
       end
 
       def roll(
