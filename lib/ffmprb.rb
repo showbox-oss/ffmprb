@@ -33,7 +33,7 @@ module Ffmprb
     end
     alias :action! :process  # ;)
 
-    attr_accessor :debug
+    attr_accessor :debug, :ffmpeg_debug
 
     def logger
       @logger ||= Logger.new(STDERR).tap do |logger|
@@ -50,7 +50,12 @@ module Ffmprb
 
 end
 
+
+# NOTE http://12factor.net etc
+
+Ffmprb.ffmpeg_debug = ENV.fetch('FFMPRB_FFMPEG_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
 Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
+
 
 require_relative 'ffmprb/execution'
 require_relative 'ffmprb/file'

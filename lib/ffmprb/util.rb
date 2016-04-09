@@ -20,7 +20,7 @@ module Ffmprb
       end
 
       def ffmpeg(*args, limit: nil, timeout: cmd_timeout, ignore_broken_pipe: false)
-        args = ['-loglevel', 'debug'] + args  if Ffmprb.debug
+        args = ['-loglevel', 'debug'] + args  if Ffmprb.ffmpeg_debug
         sh *ffmpeg_cmd, *args, output: :stderr, limit: limit, timeout: timeout, ignore_broken_pipe: ignore_broken_pipe
       end
 
