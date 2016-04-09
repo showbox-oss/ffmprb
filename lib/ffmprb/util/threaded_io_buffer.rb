@@ -28,8 +28,8 @@ module Ffmprb
 
         @input = input
         @outputs = {}
-        outputs.each do |out|
-          @outputs[out] = SizedQueue.new(self.class.blocks_max)
+        outputs.each do |outp|
+          @outputs[outp] = SizedQueue.new(self.class.blocks_max)
         end
         @stats = {blocks_max: 0, bytes_in: 0, bytes_out: 0}
         @terminate = false
@@ -130,7 +130,7 @@ module Ffmprb
             begin
               reader_input!.close  if reader_input!.respond_to?(:close)
             rescue
-              Ffmprb.logger.error "ThreadedIoBuffer input closing error: #{$!.message}"
+              Ffmprb.logger.error "#{$!.class.name} closing ThreadedIoBuffer input: #{$!.message}"
             end
             # reader_done!
             Ffmprb.logger.debug "ThreadedIoBuffer reader terminated (#{@stats})"
@@ -193,7 +193,7 @@ module Ffmprb
             begin
               writer_output!(output).close  if !broken && writer_output!(output).respond_to?(:close)
             rescue
-              Ffmprb.logger.error "ThreadedIoBuffer output closing error: #{$!.message}"
+              Ffmprb.logger.error "#{$!.class.name} closing ThreadedIoBuffer output: #{$!.message}"
             end
             Ffmprb.logger.debug "ThreadedIoBuffer writer terminated (#{@stats})"
           end

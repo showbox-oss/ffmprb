@@ -107,6 +107,22 @@ describe Ffmprb do
 
     end
 
+    it "should fail on too much inputs" do
+      too_much = 99
+      expect {
+        Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
+
+          inps = (0..100).map{input file_input}
+          output file_output do
+            inps.each do |inp|
+              roll inp
+            end
+          end
+
+        end
+      }.to raise_error Ffmprb::Error
+    end
+
     it "should transcode" do
       Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
 
@@ -131,7 +147,7 @@ describe Ffmprb do
 
         Ffmprb.process(@av_out_file) do |file_output|
 
-          in1 = input(tmp_papng, default_fps: 25)
+          in1 = input(tmp_papng, video: {fps: 25})
           output(file_output, audio: false) do  # XXX
             roll in1
           end
@@ -631,6 +647,32 @@ describe Ffmprb do
       end
 
       it "should duck the overlay sound wrt the main sound" do
+        # NOTE non-streaming output file requires additional development see #181845
+        Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_stream) do |input1, input2, output1|
+
+          in1 = input(input1)
+          in2 = input(input2)
+          output(output1) do
+            lay in1, transition: {blend: 1}
+            overlay in2.loop, duck: :audio
+          end
+
+        end
+
+        @av_out_stream.sample at: 2 do |snap, sound|
+          check_white! pixel_data(snap, 100, 100)
+          expect(wave_data(sound).frequency).to be_between(NOTES.G6, NOTES.B6)
+        end
+
+        @av_out_stream.sample at: 6 do |snap, sound|
+          check_black! pixel_data(snap, 100, 100)
+          expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
+        end
+
+        expect(@av_out_stream.length).to be_approximately 16
+      end
+
+      it "should duck some overlay sound wrt some main sound" do
         Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |default|
           begin
             Ffmprb::Util::ThreadedIoBuffer.block_size = 8*1024

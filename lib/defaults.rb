@@ -14,15 +14,17 @@ module Ffmprb
   Process.duck_audio_volume_lo = 0.1
   Process.timeout = 30
 
-  Process.input_options = {noautorotate: true}
+  Process.input_video_auto_rotate = false
+  Process.input_video_fps = nil  # NOTE the documented ffmpeg default is 25
 
   Process.output_video_resolution = CGA
   Process.output_video_fps = 16
   Process.output_audio_encoder = 'libmp3lame'
 
-  Util.ffmpeg_cmd = %w[ffmpeg -y]
-  Util.ffprobe_cmd = ['ffprobe']
   Util.cmd_timeout = 30
+  Util.ffmpeg_cmd = %w[ffmpeg -y]
+  Util.ffmpeg_inputs_max = 31
+  Util.ffprobe_cmd = ['ffprobe']
 
   Util::ThreadedIoBuffer.blocks_max = 1024
   Util::ThreadedIoBuffer.block_size = 64*1024

@@ -9,7 +9,8 @@ module Ffmprb
       attr_accessor :duck_audio_transition_length,
         :duck_audio_transition_in_start, :duck_audio_transition_out_start
 
-      attr_accessor :input_options
+      attr_accessor :input_video_auto_rotate
+      attr_accessor :input_video_fps
 
       attr_accessor :output_video_resolution
       attr_accessor :output_video_fps
@@ -29,10 +30,20 @@ module Ffmprb
         end
       end
 
+      def input_video_options
+        {
+          auto_rotate: input_video_auto_rotate,
+          fps: input_video_fps
+        }
+      end
+      def input_audio_options
+        {
+        }
+      end
       def output_video_options
         {
-          resolution: output_video_resolution,
-          fps: output_video_fps
+          fps: output_video_fps,
+          resolution: output_video_resolution
         }
       end
       def output_audio_options
@@ -61,17 +72,21 @@ module Ffmprb
             silence.each do |silent|
               next  if silent.end_at && silent.start_at && (silent.end_at - silent.start_at) < silent_min
 
-              transition_in_start = silent.start_at + Process.duck_audio_transition_in_start
-              ducked_overlay_volume.merge!(
-                [transition_in_start, 0.0].max => volume_lo,
-                (transition_in_start + Process.duck_audio_transition_length) => volume_hi
-              )  if silent.start_at
+              if silent.start_at
+                transition_in_start = silent.start_at + Process.duck_audio_transition_in_start
+                ducked_overlay_volume.merge!(
+                  [transition_in_start, 0.0].max => volume_lo,
+                  (transition_in_start + Process.duck_audio_transition_length) => volume_hi
+                )
+              end
 
-              transition_out_start = silent.end_at + Process.duck_audio_transition_out_start
-              ducked_overlay_volume.merge!(
-                [transition_out_start, 0.0].max => volume_hi,
-                (transition_out_start + Process.duck_audio_transition_length) => volume_lo
-              )  if silent.end_at
+              if silent.end_at
+                transition_out_start = silent.end_at + Process.duck_audio_transition_out_start
+                ducked_overlay_volume.merge!(
+                  [transition_out_start, 0.0].max => volume_hi,
+                  (transition_out_start + Process.duck_audio_transition_length) => volume_lo
+                )
+              end
             end
             overlay in_over.volume ducked_overlay_volume
 
@@ -91,19 +106,21 @@ module Ffmprb
       self.timeout = opts.delete(:timeout) || self.class.timeout
 
       self.ignore_broken_pipe = opts.delete(:ignore_broken_pipe)
-      fail Error, "Unknown options: #{opts}"  unless opts.empty?
+      fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
     end
 
-    def input(io, **opts)
-      Input.new(io, self, **self.class.input_options.merge(opts)).tap do |inp|
+    def input(io, video: true, audio: true)
+      Input.new(io, self,
+        video: channel_params(video, self.class.input_video_options),
+        audio: channel_params(audio, self.class.input_audio_options)
+      ).tap do |inp|
+        fail Error, "Too many inputs to the process, try breaking it down somehow"  if @inputs.size > Util.ffmpeg_inputs_max
         @inputs << inp
       end
     end
 
-    def temp_input(extname)  # XXX SPEC ME
-      input(nil).tap do |inp|
-        inp.temporise! extname
-      end
+    def temp_input(extname)
+      input File::TempFifo.new extname
     end
 
     def input_label(input)
@@ -114,9 +131,9 @@ module Ffmprb
       Output.new(io, self,
         video: channel_params(video, self.class.output_video_options),
         audio: channel_params(audio, self.class.output_audio_options)
-      ).tap do |out|
-        @outputs << out
-        out.instance_exec &blk  if blk
+      ).tap do |outp|
+        @outputs << outp
+        outp.instance_exec &blk  if blk
       end
     end
 
@@ -142,19 +159,24 @@ module Ffmprb
     private
 
     def command
-      input_options + filter_options + output_options
+      input_args + filter_args + output_args
     end
 
-    def input_options
-      @inputs.map(&:options).flatten(1)
+    def input_args
+      filter_args  # NOTE must run first
+      @input_args ||= @inputs.map(&:args).reduce(:+)
     end
 
-    def filter_options
-      Filter.complex_options @outputs.map(&:filters).reduce(:+)
+    # NOTE must run first
+    def filter_args
+      @filter_args ||= Filter.complex_args(
+        @outputs.map(&:filters).reduce(:+)
+      )
     end
 
-    def output_options
-      @outputs.map(&:options).flatten(1)
+    def output_args
+      filter_args  # NOTE must run first
+      @output_args ||= @outputs.map(&:args).reduce(:+)
     end
 
     def channel_params(value, default)
