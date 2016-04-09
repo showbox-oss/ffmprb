@@ -18,7 +18,7 @@ module Ffmprb
       fail Error, "Can sample either video OR audio UNLESS a block is given"  unless block_given? || !!audio != !!video
 
       cmd = %W[-i #{path}]
-      cmd.concat %W[-deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{video.path}]  if video
+      cmd.concat %W[-deinterlace -an -ss #{at} -vframes 1 #{video.path}]  if video
       cmd.concat %W[-vn -ss #{at} -t 1 #{audio.path}]  if audio
       Util.ffmpeg *cmd
 
