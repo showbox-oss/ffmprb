@@ -63,7 +63,7 @@ module Ffmprb
 
       # NOTE a best guess kinda method
       def sh_escape(str)
-        if str !~ /^[a-z0-9\/.\\_-]*$/i && str !~ /"/
+        if str !~ /^[a-z0-9\/.:_-]*$/i && str !~ /"/
           "\"#{str}\""
         else
           str
