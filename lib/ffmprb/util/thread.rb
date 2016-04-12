@@ -91,7 +91,7 @@ module Ffmprb
         end
       end
 
-      def join_children!(limit=nil, timeout: self.class.timeout)
+      def join_children!(limit=nil, timeout: Thread.timeout)
         timeout = [timeout, limit].compact.min
         Ffmprb.logger.debug "joining threads: #{@live_children.size} live, #{@dead_children_q.size} dead"
         until @live_children.empty? && @dead_children_q.empty?

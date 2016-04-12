@@ -81,7 +81,7 @@ module Ffmprb
           Util::Thread.new "looper" do
             Ffmprb.logger.debug "Looping #{buff_ios.size} times"
 
-            process = Process.new(ignore_broken_pipe: true)  # NOTE may not write its entire output, it's ok
+            process = Process.new(ignore_broken_pipes: true)  # NOTE may not write its entire output, it's ok
             ins = buff_ios.map{|i| process.input i}
             process.output(@aux_input.io, video: nil, audio: nil) do
               ins.each{|i| lay i}

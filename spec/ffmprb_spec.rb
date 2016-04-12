@@ -195,7 +195,7 @@ describe Ffmprb do
           end
 
           expect do
-            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipe: to_not_to == :not_to) do |file_input|
+            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipes: to_not_to == :not_to) do |file_input|
 
               in1 = input(file_input)
               output(av_pipe, video: {resolution: Ffmprb::HD_1080p, fps: 60}) do

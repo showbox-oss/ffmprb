@@ -99,20 +99,20 @@ module Ffmprb
     end
 
     attr_accessor :timeout
-    attr_accessor :ignore_broken_pipe
+    attr_accessor :ignore_broken_pipes
 
     def initialize(*args, **opts)
       @inputs, @outputs = [], []
-      self.timeout = opts.delete(:timeout) || self.class.timeout
+      self.timeout = opts.delete(:timeout) || Process.timeout
 
-      self.ignore_broken_pipe = opts.delete(:ignore_broken_pipe)
+      self.ignore_broken_pipes = opts.delete(:ignore_broken_pipes)
       fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
     end
 
     def input(io, video: true, audio: true)
       Input.new(io, self,
-        video: channel_params(video, self.class.input_video_options),
-        audio: channel_params(audio, self.class.input_audio_options)
+        video: channel_params(video, Process.input_video_options),
+        audio: channel_params(audio, Process.input_audio_options)
       ).tap do |inp|
         fail Error, "Too many inputs to the process, try breaking it down somehow"  if @inputs.size > Util.ffmpeg_inputs_max
         @inputs << inp
@@ -129,8 +129,8 @@ module Ffmprb
 
     def output(io, video: true, audio: true, &blk)
       Output.new(io, self,
-        video: channel_params(video, self.class.output_video_options),
-        audio: channel_params(audio, self.class.output_audio_options)
+        video: channel_params(video, Process.output_video_options),
+        audio: channel_params(audio, Process.output_audio_options)
       ).tap do |outp|
         @outputs << outp
         outp.instance_exec &blk  if blk
@@ -149,7 +149,9 @@ module Ffmprb
         # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
         # XXX just to return something -- no apparent practical use
         cmd = command
-        Util.ffmpeg(*cmd, limit: limit, timeout: timeout, ignore_broken_pipe: @ignore_broken_pipe).tap do |res|
+        opts = {limit: limit, timeout: timeout}
+        opts[:ignore_broken_pipes] = ignore_broken_pipes  unless ignore_broken_pipes.nil?
+        Util.ffmpeg(*cmd, **opts).tap do |res|
           Util::Thread.join_children! limit, timeout: timeout
         end
       end

@@ -274,8 +274,8 @@ module Ffmprb
             inter_i, inter_o = File.threaded_buffered_fifo(main_av_inter_o.extname)
             Ffmprb.logger.debug "Allocated fifos to buffer media (#{inter_i.path}>#{inter_o.path}) while finding silence"
 
-            ignore_broken_pipe_was = process.ignore_broken_pipe  # XXX maybe throw an exception instead?
-            process.ignore_broken_pipe = true  # NOTE audio ducking process may break the overlay pipe
+            ignore_broken_pipes_was = process.ignore_broken_pipes  # XXX maybe throw an exception instead?
+            process.ignore_broken_pipes = true  # NOTE audio ducking process may break the overlay pipe
 
             Util::Thread.new "audio ducking" do
               silence = Ffmprb.find_silence(main_av_inter_o, inter_i)
@@ -283,7 +283,7 @@ module Ffmprb
               Ffmprb.logger.debug "Audio ducking with silence: [#{silence.map{|s| "#{s.start_at}-#{s.end_at}"}.join ', '}]"
 
               Process.duck_audio inter_o, over_a_o, silence, main_av_o,
-                process_options: {ignore_broken_pipe: ignore_broken_pipe_was, timeout: process.timeout},
+                process_options: {ignore_broken_pipes: ignore_broken_pipes_was, timeout: process.timeout},
                 video: channel(:video), audio: channel(:audio)
             end
           end

@@ -28,7 +28,9 @@ module Ffmprb
 
   Util::ThreadedIoBuffer.blocks_max = 1024
   Util::ThreadedIoBuffer.block_size = 64*1024
-  Util::ThreadedIoBuffer.timeout = 9
+  Util::ThreadedIoBuffer.timeout = 1
+  Util::ThreadedIoBuffer.timeout_limit = 8
+  # NOTE all this effectively sets the minimum throughput: blocks_max * blocks_size / timeout * timeout_limit
 
   Util::Thread.timeout = 15
 

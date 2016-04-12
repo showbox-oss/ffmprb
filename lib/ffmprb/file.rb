@@ -186,4 +186,4 @@ end
 
 require_relative 'file/sample'
 require_relative 'file/temp_fifo'
-require_relative 'file/threaded_buffered_fifo'
+require_relative 'file/threaded_buffered'

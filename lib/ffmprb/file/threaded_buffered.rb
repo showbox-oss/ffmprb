@@ -20,11 +20,18 @@ module Ffmprb
         end
         Ffmprb.logger.debug "IoBuffering from #{input_fifo_file.path} to #{output_fifo_file.path} started"
 
-        # TODO see threaded_io_buffer's XXXs: yield buff  if block_given?
+        # TODO yield buff  if block_given?
 
         [input_fifo_file, output_fifo_file]
       end
 
+    end
+
+    def threaded_buffered_copy_to(*dsts)
+      Util::ThreadedIoBuffer.new(
+        self.class.opener(self, 'r'),
+        *dsts.map{|io| self.class.opener io, 'w'}
+      )
     end
 
   end
