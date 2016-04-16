@@ -44,7 +44,7 @@ module Ffmprb
           end
 
           Thread.join_children!.tap do
-            Ffmprb.logger.debug "ThreadedIoBuffer terminated successfully (#{@stats})"
+            Ffmprb.logger.debug "ThreadedIoBuffer (#{@input.path}->#{@outputs.map(&:io).map(&:path)}) terminated successfully (#{@stats})"
           end
         end
       end
@@ -195,7 +195,7 @@ module Ffmprb
             rescue
               Ffmprb.logger.error "#{$!.class.name} closing ThreadedIoBuffer output: #{$!.message}"
             end
-            Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) terminated (#{@stats})"
+            Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io && output_io.path}) terminated (#{@stats})"
           end
         end
       end
@@ -226,13 +226,13 @@ module Ffmprb
               next  if output.broken
 
               timeouts += 1
-              Ffmprb.logger.warn "A little bit of timeout (#{ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...)..."
+              Ffmprb.logger.warn "A little bit of timeout (>#{timeouts*ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...; #{@outputs.reject(&:io).size}/#{@outputs.size} unopen/total)"
 
               retry  unless timeouts >= ThreadedIoBuffer.timeout_limit # NOTE the queue has probably overflown
 
               @terminate = Error.new("the writer has failed with timeout limit while queuing")
               # timeout!
-              fail Error, "Looks like we're stuck (#{ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...)..."
+              fail Error, "Looks like we're stuck (>#{ThreadedIoBuffer.timeout_limit*ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...)..."
             end
         end.empty?
       end

@@ -18,15 +18,19 @@ module Ffmprb
 
       attr_accessor :timeout
 
-      def intermediate_channel_extname(*media)
-        if media == [:video]
-          '.y4m'
-        elsif media == [:audio]
-          '.wav'
-        elsif media.sort == [:audio, :video]
-          '.flv'
+      def intermediate_channel_extname(video:, audio:)
+        if video
+          if audio
+            '.flv'
+          else
+            '.y4m'
+          end
         else
-          fail Error, "I don't know how to channel [#{media.join ', '}]"
+          if audio
+            '.wav'
+          else
+            fail Error, "I don't know how to channel [#{media.join ', '}]"
+          end
         end
       end
 
@@ -117,10 +121,6 @@ module Ffmprb
         fail Error, "Too many inputs to the process, try breaking it down somehow"  if @inputs.size > Util.ffmpeg_inputs_max
         @inputs << inp
       end
-    end
-
-    def temp_input(extname)
-      input File::TempFifo.new extname
     end
 
     def input_label(input)

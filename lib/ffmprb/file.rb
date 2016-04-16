@@ -53,7 +53,9 @@ module Ffmprb
       end
 
       def temp_fifo(extname='.tmp', &blk)
-        fifo_file = TempFifo.new(extname)
+        path = temp_fifo_path(extname)
+        ::File.mkfifo path
+        fifo_file = create(path)
 
         return fifo_file  unless block_given?
 
@@ -185,5 +187,4 @@ module Ffmprb
 end
 
 require_relative 'file/sample'
-require_relative 'file/temp_fifo'
 require_relative 'file/threaded_buffered'

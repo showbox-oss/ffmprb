@@ -251,19 +251,15 @@ module Ffmprb
 
             main_av_o = @channel_lbl_ios["#{lbl_out}:a"]
             fail Error, "Main output does not contain audio to duck"  unless main_av_o
-            # XXX#181845 must really seperate channels for streaming (e.g. mp4 wouldn't stream through the fifo)
-            # NOTE what really must be done here (optimisation & compatibility):
-            # - output v&a through non-compressed pipes
-            # - v-output will be input to the new v+a merging+encoding process
-            # - a-output will go through the ducking process below and its output will be input to the m+e process above
-            # - v-output will have to use another thread-buffered pipe
-            main_av_inter_o = File.temp_fifo(main_av_o.extname)
+
+            intermediate_extname = Process.intermediate_channel_extname video: main_av_o.channel?(:video), audio: main_av_o.channel?(:audio)
+            main_av_inter_o = File.temp_fifo(intermediate_extname)
             @channel_lbl_ios.each do |channel_lbl, io|
               @channel_lbl_ios[channel_lbl] = main_av_inter_o  if io == main_av_o  # XXX ~~~spaghetti
             end
             Ffmprb.logger.debug "Re-routed the main audio output (#{main_av_inter_o.path}->...->#{main_av_o.path}) through the process of audio ducking"
 
-            over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname :audio)
+            over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname audio: true, video: false)
             lbl_over = "o#{idx}l#{i}"
             @filters.concat(
               over_reel.reel.filters_for lbl_over, video: false, audio: channel(:audio)
@@ -271,7 +267,7 @@ module Ffmprb
             @channel_lbl_ios["#{lbl_over}:a"] = over_a_i
             Ffmprb.logger.debug "Routed and buffering an auxiliary output fifos (#{over_a_i.path}>#{over_a_o.path}) for overlay"
 
-            inter_i, inter_o = File.threaded_buffered_fifo(main_av_inter_o.extname)
+            inter_i, inter_o = File.threaded_buffered_fifo(intermediate_extname)
             Ffmprb.logger.debug "Allocated fifos to buffer media (#{inter_i.path}>#{inter_o.path}) while finding silence"
 
             ignore_broken_pipes_was = process.ignore_broken_pipes  # XXX maybe throw an exception instead?

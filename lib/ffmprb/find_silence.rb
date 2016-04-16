@@ -2,6 +2,7 @@ module Ffmprb
 
   class << self
 
+    # NOTE not for streaming just yet
     def find_silence(input_file, output_file)
       logger.debug "Finding silence (#{input_file.path}->#{output_file.path})"
       silence = []

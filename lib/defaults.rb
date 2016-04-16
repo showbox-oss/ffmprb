@@ -6,6 +6,7 @@ module Ffmprb
 
   Filter.silence_noise_max_db = -40
 
+  # NOTE ducking is currently not for streams
   Process.duck_audio_silent_min = 3
   Process.duck_audio_transition_length = 1
   Process.duck_audio_transition_in_start = -0.4
@@ -29,9 +30,12 @@ module Ffmprb
   Util::ThreadedIoBuffer.blocks_max = 1024
   Util::ThreadedIoBuffer.block_size = 64*1024
   Util::ThreadedIoBuffer.timeout = 1
-  Util::ThreadedIoBuffer.timeout_limit = 8
+  Util::ThreadedIoBuffer.timeout_limit = 15
   # NOTE all this effectively sets the minimum throughput: blocks_max * blocks_size / timeout * timeout_limit
 
   Util::Thread.timeout = 15
+
+  self.debug = false
+  self.ffmpeg_debug = false
 
 end
