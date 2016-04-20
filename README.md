@@ -138,6 +138,10 @@ Ffmprb.process do |av_input1, av_output1|
 end
 ```
 
+### ProcVis support (experimental)
+
+To enable [ProcVis](https://procvis.io) support (source), define `FFMPRB_PROC_VIS_FIREBASE_URL=my-proc-vis-io` (replace with your Firebase instance) in your running environment and watch the log for `You may view your process visualised at: https://proc-vis-io.firebaseapp.com/?pid=70311657638000 (a sample ProcVis snapshot of a full specs run).
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies.
@@ -147,6 +151,11 @@ To install this gem onto your local machine, run `bundle exec rake install`.
 To release a new version, update the version number in `version.rb`, and then run
 `bundle exec rake release` to create a git tag for the version, push git commits
 and tags, and push the `.gem` file to [rubygems.org](https://rubygems.org).
+
+### Debug
+
+To enable debug logging, define `FFMPRB_DEBUG=1` in the running environment.
+To enable ffmpeg debug logging, `FFMPRB_FFMPEG_DEBUG=1`
 
 ### Threading policy
 
