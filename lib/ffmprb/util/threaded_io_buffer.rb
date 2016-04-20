@@ -8,6 +8,7 @@ module Ffmprb
     class ThreadedIoBuffer
       include MonitorMixin
       # XXX include Synchro
+      include ProcVis::Node
 
       IO_WAIT_DELAY = 0.01
 

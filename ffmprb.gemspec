@@ -28,4 +28,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency 'rake', '>= 11.1.2'
   spec.add_development_dependency 'rmagick', '>= 2.15.4'
   spec.add_development_dependency 'ruby-sox', '>= 0.0.3'
+  spec.add_development_dependency 'firebase', '>= 0.2.6'
+
+  spec.post_install_message = "Have fun with your montage! To enable proc visualisation, install firebase gem and set FFMPRB_PROC_VIS_FIREBASE_URL env."  unless Ffmprb::FIREBASE_AVAILABLE
 end

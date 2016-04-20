@@ -35,7 +35,18 @@ module Ffmprb
 
   Util::Thread.timeout = 15
 
-  self.debug = false
-  self.ffmpeg_debug = false
+
+  # NOTE http://12factor.net etc
+
+  Ffmprb.ffmpeg_debug = ENV.fetch('FFMPRB_FFMPEG_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
+  Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
+
+  proc_vis_firebase = ENV['FFMPRB_PROC_VIS_FIREBASE']
+  if Ffmprb::FIREBASE_AVAILABLE
+    fail Error, "Please provide just the name of the firebase in FFMPRB_PROC_VIS_FIREBASE (e.g. my-proc-vis-io for https://my-proc-vis-io.firebaseio.com/proc/)"  if proc_vis_firebase =~ /\//
+    Ffmprb.proc_vis_firebase = proc_vis_firebase
+  elsif proc_vis_firebase
+    Ffmprb.logger.warn "Firebase unavailable (have firebase gem installed or unset FFMPRB_PROC_VIS_FIREBASE to get rid of this warning)"
+  end
 
 end
