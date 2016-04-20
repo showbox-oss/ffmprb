@@ -48,7 +48,21 @@ module Ffmprb
 
           # NOTE (2)
           # NOTE replace the raw input io with a copy io, getting original fifo/file
-          src_io = @raw.temporise_io!
+          intermediate_extname = Process.intermediate_channel_extname(video: @raw.io.channel?(:video), audio: @raw.io.channel?(:audio))
+          src_io = @raw.temporise_io!(intermediate_extname)
+          if src_io.extname != intermediate_extname
+            meh_src_io, src_io = src_io, File.temp_fifo(intermediate_extname)
+            Util::Thread.new "source converter" do
+              Ffmprb.process do
+
+                inp = input(meh_src_io)
+                output(src_io) do
+                  lay inp
+                end
+
+              end
+            end
+          end
           cpy_io = File.temp_fifo(src_io.extname)
           Ffmprb.logger.debug "(L2) Temporising the raw input (#{src_io.path}) and creating copy (#{cpy_io.path})"
 
@@ -56,7 +70,6 @@ module Ffmprb
 
           # NOTE (3)
           # NOTE preprocessed and filtered fifo
-          intermediate_extname = Process.intermediate_channel_extname video: src_io.channel?(:video), audio: src_io.channel?(:audio)
           dst_io = File.temp_fifo(intermediate_extname)
           @raw.process.proc_vis_node dst_io
 
@@ -72,14 +85,19 @@ module Ffmprb
               end
 
             end
-
           end
 
           # Ffmprb.logger.debug "Preprocessed (from #{src_io.path}) looping input: #{dst_io.path}, output: #{io.io.path}, and raw input copy will go through #{buff_raw_io.path} to #{@raw.io.path}..."
 
           buff_ios = (1..times).map{File.temp_fifo intermediate_extname}
           Ffmprb.logger.debug "Preprocessed #{dst_io.path} will be teed to #{buff_ios.map(&:path).join '; '}"
-          dst_io.threaded_buffered_copy_to *buff_ios
+          looping = true
+          Util::Thread.new "cloning buffer watcher" do
+            dst_io.threaded_buffered_copy_to *buff_ios
+            Util::Thread.join_children!
+
+            Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at https://github.com/showbox-oss/ffmprb/issues please)."  if looping && times == Util.ffmpeg_inputs_max
+          end
 
           # Ffmprb.logger.debug "Concatenation of #{buff_ios.map(&:path).join '; '} will go to #{@io.io.path} to be fed to this process"
 
@@ -92,13 +110,17 @@ module Ffmprb
             Ffmprb.logger.debug "Looping #{buff_ios.size} times"
 
             Ffmprb.logger.debug "(L4) Looping (#{buff_ios.map &:path}) into (#{aux_io.path})"
-            Ffmprb.process parent: @raw.process do  # NOTE may not write its entire output, it's ok
+            begin
+              Ffmprb.process parent: @raw.process do  # NOTE may not write its entire output, it's ok
 
-              ins = buff_ios.map{ |i| input i }
-              output(aux_io, video: nil, audio: nil) do
-                ins.each{ |i| lay i }
+                ins = buff_ios.map{ |i| input i }
+                output(aux_io, video: nil, audio: nil) do
+                  ins.each{ |i| lay i }
+                end
+
               end
-
+            ensure
+              looping = false  # NOTE see the above warning
             end
           end
 

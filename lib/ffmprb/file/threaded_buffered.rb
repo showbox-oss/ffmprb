@@ -4,14 +4,13 @@ module Ffmprb
 
     class << self
 
-      def threaded_buffered_fifo(extname='.tmp', proc_vis: nil)
+      def threaded_buffered_fifo(extname='.tmp', reader_open_on_writer_idle_limit: nil, proc_vis: nil)
         input_fifo_file = temp_fifo(extname)
         output_fifo_file = temp_fifo(extname)
         Ffmprb.logger.debug "Opening #{input_fifo_file.path}>#{output_fifo_file.path} for buffering"
         Util::Thread.new do
           begin
-            io_buff = Util::ThreadedIoBuffer.new(opener(input_fifo_file, 'r'), opener(output_fifo_file, 'w'))
-
+            io_buff = Util::ThreadedIoBuffer.new(opener(input_fifo_file, 'r'), opener(output_fifo_file, 'w'), keep_outputs_open_on_input_idle_limit: reader_open_on_writer_idle_limit)
             if proc_vis
               proc_vis.proc_vis_edge input_fifo_file, io_buff
               proc_vis.proc_vis_edge io_buff, output_fifo_file

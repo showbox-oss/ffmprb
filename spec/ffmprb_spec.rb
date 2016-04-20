@@ -183,7 +183,7 @@ describe Ffmprb do
     end
 
     it "should ignore broken pipes (or not)" do
-      [:to, :not_to].each do |to_not_to|
+      [[:to, false, Ffmprb::Error], [:not_to, true, nil]].each do |to_not_to, ignore_broken_pipes, error|
         Ffmprb::File.temp_fifo('.flv') do |av_pipe|
           Thread.new do
             begin
@@ -195,7 +195,7 @@ describe Ffmprb do
           end
 
           expect do
-            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipes: to_not_to == :not_to) do |file_input|
+            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipes: ignore_broken_pipes) do |file_input|
 
               in1 = input(file_input)
               output(av_pipe, video: {resolution: Ffmprb::HD_1080p, fps: 60}) do
@@ -203,7 +203,7 @@ describe Ffmprb do
               end
 
             end
-          end.send to_not_to, raise_error(*(to_not_to == :to ? Ffmprb::Error : nil))
+          end.send to_not_to, raise_error(*error)
         end
       end
     end
@@ -242,7 +242,7 @@ describe Ffmprb do
     it "should loop" do
       Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |default|
         begin
-          Ffmprb::Util::ThreadedIoBuffer.block_size = 1024
+          Ffmprb::Util::ThreadedIoBuffer.block_size = 1024  # NOTE to check for excessive memory consumption during looping etc
 
           Ffmprb.process(@av_file_btn_wtb_16, @av_out_stream) do |file_input, file_output|
 
@@ -450,12 +450,11 @@ describe Ffmprb do
       let(:m_input) {{video: @v_file_6, audio: @a_file_g_16}}
       let(:m_output_extname) {{video: '.y4m', audio: '.wav'}}
 
-      [:video, :audio].each do |medium|
-        not_medium = ([:video, :audio] - [medium])[0]
-        medium_params = {
-          video: {},
-          audio: {encoder: nil}
-        }
+      medium_params = {
+        video: {},
+        audio: {encoder: nil}
+      }
+      [[:video, :audio], [:audio, :video]].each do |medium, not_medium|
         [
           lambda do |av_file_input, m_file_input, m_file_output|  ##1
             in1 = input(av_file_input)
@@ -507,7 +506,7 @@ describe Ffmprb do
 
               Ffmprb.process(@av_file_c_gor_9, m_input[medium], m_output, &script)
 
-              m_output.sample at: 2.5, medium => true, ([:video, :audio] - [medium])[0] => false do |sample|
+              m_output.sample at: 2.5, medium => true, not_medium => false do |sample|
                 case medium
                 when :video
                   check_greenish! pixel_data(sample, 100, 100)
@@ -520,7 +519,7 @@ describe Ffmprb do
 
               expect(m_output.length).to be_approximately 4
               expect{
-                m_output.sample at: 3, ([:video, :audio] - [medium])[0] => true, medium => false
+                m_output.sample at: 3, not_medium => true, medium => false
               }.to raise_error Ffmprb::Error
             end
 
@@ -681,7 +680,7 @@ describe Ffmprb do
       it "should duck some overlay sound wrt some main sound" do
         Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |default|
           begin
-            Ffmprb::Util::ThreadedIoBuffer.block_size = 8*1024
+            Ffmprb::Util::ThreadedIoBuffer.block_size = 1024  # NOTE to check for excessive memory consumption during looping etc
 
             Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_file) do |input1, input2, output1|
 
