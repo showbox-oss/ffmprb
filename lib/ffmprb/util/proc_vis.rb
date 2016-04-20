@@ -11,26 +11,13 @@ module Ffmprb
 
       module Node
 
-        class << self
-
-          def shorten(name)
-            if name.length <= 30
-              name
-            else
-              "#{name[0..13]}..#{name[-14..-1]}"
-            end
-          end
-
-        end
-
         attr_accessor :_proc_vis
 
         def proc_vis_name
-          lbl = (
-            respond_to?(:label) && label ||
-            respond_to?(:name) && "#{self.class.name.split('::').last}:#{Node.shorten name}" ||
+          lbl = respond_to?(:label) && label ||
+            short_name ||
             to_s
-          ).gsub(/\W+/, '_').sub(/^[^[:alpha:]]*/, '')
+          # ).gsub(/\W+/, '_').sub(/^[^[:alpha:]]*/, '')
           "#{object_id} [labelType=\"html\" label=#{lbl.to_json}]"
         end
 
@@ -40,6 +27,20 @@ module Ffmprb
 
         def proc_vis_edge(from, to, op=:upsert)
           _proc_vis.proc_vis_edge from, to, op  if _proc_vis
+        end
+
+        private
+
+        def short_name
+          return  unless respond_to? :name
+
+          short =
+            if name.length <= 30
+              name
+            else
+              "#{name[0..13]}..#{name[-14..-1]}"
+            end
+          "#{self.class.name.split('::').last}: #{short}"
         end
 
       end
@@ -108,9 +109,8 @@ module Ffmprb
         def proc_vis_init?
           !!proc_vis_firebase_client
         end
-        def proc_vis_init
-          @_proc_vis_mon ||= Monitor.new
-          @_proc_vis_upq ||= Queue.new
+
+        def proc_vis_up_init
           @_proc_vis_thr ||= Thread.new do  # NOTE update throttling
             prev_t = Time.now
             while @_proc_vis_upq.deq  # NOTE currently, runs forever (nil terminator needed)
@@ -122,18 +122,25 @@ module Ffmprb
             end
           end
         end
+
+        def proc_vis_sync_init
+          @_proc_vis_mon ||= Monitor.new
+          @_proc_vis_upq ||= Queue.new
+        end
         def proc_vis_sync(&blk)
           @_proc_vis_mon.synchronize &blk  if blk
         end
 
         def proc_vis_firebase_client
-          @proc_vis_firebase_client ||=
+          return @proc_vis_firebase_client  if defined? @proc_vis_firebase_client
+          @proc_vis_firebase_client =
             if proc_vis_firebase
               url = "https://#{proc_vis_firebase}.firebaseio.com/proc/"
               Ffmprb.logger.debug "Connecting to #{url}"
               begin
                 Firebase::Client.new(url).tap do
                   Ffmprb.logger.info "Connected to #{url}"
+                  proc_vis_up_init
                 end
               rescue
                 Ffmprb.logger.error "Could not connect to #{url}"
@@ -145,7 +152,7 @@ module Ffmprb
 
       def self.included(klass)
         klass.extend ClassMethods
-        klass.send :proc_vis_init
+        klass.send :proc_vis_sync_init
       end
 
 
