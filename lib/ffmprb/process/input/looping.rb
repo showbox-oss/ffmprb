@@ -50,13 +50,13 @@ module Ffmprb
           # NOTE replace the raw input io with a copy io, getting original fifo/file
           intermediate_extname = Process.intermediate_channel_extname(video: @raw.io.channel?(:video), audio: @raw.io.channel?(:audio))
           src_io = @raw.temporise_io!(intermediate_extname)
-          if src_io.extname != intermediate_extname
+          if src_io.extname != intermediate_extname  # NOTE kinda like src_io is not suitable for piping
             meh_src_io, src_io = src_io, File.temp_fifo(intermediate_extname)
             Util::Thread.new "source converter" do
               Ffmprb.process do
 
                 inp = input(meh_src_io)
-                output(src_io) do
+                output(src_io, video: nil, audio: nil) do  # XXX this is not properly tested, unfortunately
                   lay inp
                 end
 
