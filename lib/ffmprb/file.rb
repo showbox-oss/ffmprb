@@ -132,11 +132,12 @@ module Ffmprb
       end
     end
 
-    def length
+    def length(force=false)
+      @duration = nil  if force
       return @duration  if @duration
 
       # NOTE first attempt
-      @duration = probe['format']['duration']
+      @duration = probe(force)['format']['duration']
       @duration &&= @duration.to_f
       return @duration  if @duration
 

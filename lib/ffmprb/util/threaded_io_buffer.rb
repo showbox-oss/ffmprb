@@ -6,11 +6,8 @@ module Ffmprb
 
     # TODO the events mechanism is currently unused (and commented out) => synchro mechanism not needed
     class ThreadedIoBuffer
-      include MonitorMixin
       # XXX include Synchro
       include ProcVis::Node
-
-      IO_WAIT_DELAY = 0.01
 
       class << self
 
@@ -18,13 +15,15 @@ module Ffmprb
         attr_accessor :block_size
         attr_accessor :timeout
         attr_accessor :timeout_limit
+        attr_accessor :io_wait_timeout
 
       end
+
 
       # NOTE input/output can be lambdas for single asynchronic io evaluation
       #      the lambdas must be timeout-interrupt-safe (since they are wrapped in timeout blocks)
       # NOTE all ios are being opened and closed as soon as possible
-      def initialize(input, *outputs)
+      def initialize(input, *outputs, keep_outputs_open_on_input_idle_limit: nil)
         super()  # NOTE for the monitor, apparently
 
         Ffmprb.logger.debug "ThreadedIoBuffer initializing with (#{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size})"
@@ -33,8 +32,9 @@ module Ffmprb
         @outputs = outputs.map do |outp|
           OpenStruct.new _io: outp, q: SizedQueue.new(ThreadedIoBuffer.blocks_max)
         end
-        @stats = {blocks_max: 0, bytes_in: 0, bytes_out: 0}
+        @stats = Stats.new(self)
         @terminate = false
+        @keep_outputs_open_on_input_idle_limit = keep_outputs_open_on_input_idle_limit
         # @events = {}
 
         Thread.new "io buffer main" do
@@ -91,6 +91,10 @@ module Ffmprb
       # handle_synchronously :fire!
       #
 
+      def label
+        "IObuff: Curr/Peak/Max=#{@stats.blocks_buff}/#{@stats.blocks_max}/#{ThreadedIoBuffer.blocks_max} In/Out=#{@stats.bytes_in}/#{@stats.bytes_out}"
+      end
+
       private
 
       class AllOutputsBrokenError < Error
@@ -118,14 +122,52 @@ module Ffmprb
       def init_reader!
         Thread.new("buffer reader") do
           begin
-            while s = reader_input!.read(ThreadedIoBuffer.block_size)
-              synchronize do
-                @stats[:bytes_in] += s.length
+            input_io = reader_input!
+            loop do
+              s = ''
+              begin
+                while s.length < ThreadedIoBuffer.block_size
+                  timeouts = 0
+                  logged_timeouts = 1
+                  begin
+                    ss = input_io.read_nonblock(ThreadedIoBuffer.block_size - s.length)
+                    @stats.add_bytes_in ss.length
+                    s += ss
+                  rescue IO::WaitReadable
+                    if !@terminate && @stats.bytes_in > 0 && @stats.blocks_buff == 0 && @keep_outputs_open_on_input_idle_limit && timeouts * ThreadedIoBuffer.io_wait_timeout > @keep_outputs_open_on_input_idle_limit
+                      if s.length > 0
+                        output_enq! s
+                        s = ''  # NOTE let's see if it helps outputting an incomplete block
+                      else
+                        Ffmprb.logger.debug "ThreadedIoBuffer reader (from #{input_io.path}) giving up after waiting >#{@keep_outputs_open_on_input_idle_limit}s, after reading #{@stats.bytes_in}b closing outputs"
+                        @terminate = true
+                        output_enq! nil  # NOTE EOF signal
+                      end
+                    else
+                      timeouts += 1
+                      if !@terminate && timeouts > 2 * logged_timeouts
+                        Ffmprb.logger.debug "ThreadedIoBuffer reader (from #{input_io.path}) retrying... (#{timeouts} reads): #{$!.class}"
+                        logged_timeouts = timeouts
+                      end
+                      IO.select [input_io], nil, nil, ThreadedIoBuffer.io_wait_timeout
+                      retry
+                    end
+                  rescue IO::WaitWritable  # NOTE should not really happen, so just for conformance
+                    Ffmprb.logger.error "ThreadedIoBuffer reader (from #{input_io.path}) gets a #{$!} - should not really happen."
+                    IO.select nil, [input_io], nil, ThreadedIoBuffer.io_wait_timeout
+                    retry
+                  end
+                end
+              ensure
+                output_enq! s  unless @terminate
               end
-              output_enq! s
             end
-            @terminate = true
-            output_enq! nil  # NOTE EOF signal
+          rescue EOFError
+            unless @terminate
+              Ffmprb.logger.debug "ThreadedIoBuffer reader (from #{input_io.path}) breaking off"
+              @terminate = true
+              output_enq! nil  # NOTE EOF signal
+            end
           rescue AllOutputsBrokenError
             Ffmprb.logger.info "All outputs broken"
           ensure
@@ -158,18 +200,15 @@ module Ffmprb
       def init_writer!(output)
         Thread.new("buffer writer") do
           begin
+            output_io = writer_output!(output)
             while s = output.q.deq  # NOTE until EOF signal
-              written = 0
-              tries = 0
-              logged_tries = 1/2
+              @stats.blocks_for output, output.q.length
+              timeouts = 0
+              logged_timeouts = 1
               begin
-                tries += 1
                 fail @terminate  if @terminate.kind_of? Exception
-                output_io = writer_output!(output)
                 written = output_io.write_nonblock(s)  if output_io  # NOTE will only be nil if @terminate is an exception
-                synchronize do
-                  @stats[:bytes_out] += written
-                end
+                @stats.add_bytes_out written
 
                 if written != s.length  # NOTE kinda optimisation
                   s = s[written..-1]
@@ -177,22 +216,28 @@ module Ffmprb
                 end
 
               rescue IO::WaitWritable
-                if tries == 2 * logged_tries
-                  Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) retrying... (#{tries} writes): #{$!.class}"
-                  logged_tries = tries
+                timeouts += 1
+                if timeouts > 2 * logged_timeouts
+                  Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) retrying... (#{timeouts} writes): #{$!.class}"
+                  logged_timeouts = timeouts
                 end
-                sleep IO_WAIT_DELAY
+                IO.select nil, [output_io], nil, ThreadedIoBuffer.io_wait_timeout
                 retry
-              rescue Errno::EPIPE
-                output.broken = true
-                Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) broken"
-                break
+              rescue IO::WaitReadable  # NOTE should not really happen, so just for conformance
+                Ffmprb.logger.error "ThreadedIoBuffer writer (to #{output_io.path}) gets a #{$!} - should not really happen."
+                IO.select [output_io], nil, ThreadedIoBuffer.io_wait_timeout
+                retry
               end
             end
+            Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) breaking off"
+          rescue Errno::EPIPE
+            Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) broken"
+            output.broken = true
           ensure
             # terminated!
             begin
               writer_output!(output).close  if !output.broken && writer_output!(output).respond_to?(:close)
+              output.broken = true
             rescue
               Ffmprb.logger.error "#{$!.class.name} closing ThreadedIoBuffer output: #{$!.message}"
             end
@@ -212,22 +257,23 @@ module Ffmprb
             next  if output.broken
 
             timeouts = 0
+            logged_timeouts = 1
             begin
               # NOTE let's assume there's no race condition here between the possible timeout exception and enq
               Timeout.timeout(ThreadedIoBuffer.timeout) do
                 output.q.enq item
               end
-              blocks = output.q.length
-              synchronize do
-                @stats[:blocks_max] = blocks  if blocks > @stats[:blocks_max]
-              end
+              @stats.blocks_for output, output.q.length
               true
 
             rescue Timeout::Error
               next  if output.broken
 
               timeouts += 1
-              Ffmprb.logger.warn "A little bit of timeout (>#{timeouts*ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...; #{@outputs.reject(&:io).size}/#{@outputs.size} unopen/total)"
+              if timeouts == 2 * logged_timeouts
+                Ffmprb.logger.warn "A little bit of timeout (>#{timeouts*ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...; #{@outputs.reject(&:io).size}/#{@outputs.size} unopen/total)"
+                logged_timeouts = timeouts
+              end
 
               retry  unless timeouts >= ThreadedIoBuffer.timeout_limit # NOTE the queue has probably overflown
 
@@ -236,6 +282,41 @@ module Ffmprb
               fail Error, "Looks like we're stuck (>#{ThreadedIoBuffer.timeout_limit*ThreadedIoBuffer.timeout}s idle) with #{ThreadedIoBuffer.blocks_max}x#{ThreadedIoBuffer.block_size}b blocks (buffering #{reader_input!.path}->...)..."
             end
         end.empty?
+      end
+
+      class Stats < OpenStruct
+        include MonitorMixin
+
+        def initialize(proc)
+          @proc = proc
+          super blocks_max: 0, bytes_in: 0, bytes_out: 0
+        end
+
+        def add_bytes_in(n)
+          synchronize do
+            self.bytes_in += n
+            @proc.proc_vis_node @proc  # NOTE update
+          end
+        end
+
+        def add_bytes_out(n)
+          synchronize do
+            self.bytes_out += n
+            @proc.proc_vis_node @proc  # NOTE update
+          end
+        end
+
+        def blocks_for(outp, n)
+          synchronize do
+            if n > blocks_max
+              self.blocks_max = n
+              @proc.proc_vis_node @proc  # NOTE update
+            end
+            (@_outp_blocks ||= {})[outp] = n
+            self.blocks_buff = @_outp_blocks.values.reduce(0, :+)
+          end
+        end
+
       end
 
     end

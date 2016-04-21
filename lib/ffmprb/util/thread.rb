@@ -14,19 +14,19 @@ module Ffmprb
 
         def timeout_or_live(limit=nil, log: "while doing this", timeout: self.timeout, &blk)
           started_at = Time.now
-          tries = 0
-          logged_tries = 0
+          timeouts = 0
+          logged_timeouts = 1
           begin
-            tries += 1
+            timeouts += 1
             time = Time.now - started_at
             fail TimeLimitError  if limit && time > limit
             Timeout.timeout timeout do
               blk.call time
             end
           rescue Timeout::Error
-            if tries > 2 * logged_tries
-              Ffmprb.logger.info "A little bit of timeout #{log.respond_to?(:call)? log.call : log} (##{tries})"
-              logged_tries = tries
+            if timeouts > 2 * logged_timeouts
+              Ffmprb.logger.info "A little bit of timeout #{log.respond_to?(:call)? log.call : log} (##{timeouts})"
+              logged_timeouts = timeouts
             end
             current.live!
             retry

@@ -22,7 +22,7 @@ module Ffmprb
         sh *ffmpeg_cmd, *args, output: :stderr, limit: limit, timeout: timeout, ignore_broken_pipes: ignore_broken_pipes
       end
 
-      def sh(*cmd, output: :stdout, log: :stderr, limit: nil, timeout: cmd_timeout, ignore_broken_pipes: false)
+      def sh(*cmd, input: nil, output: :stdout, limit: nil, timeout: cmd_timeout, ignore_broken_pipes: false)
         cmd = cmd.map &:to_s  unless cmd.size == 1
         cmd_str = cmd.size != 1 ? cmd.map{|c| sh_escape c}.join(' ') : cmd.first
         timeout = [timeout, limit].compact.min
@@ -30,11 +30,12 @@ module Ffmprb
           Ffmprb.logger.info "Popening `#{cmd_str}`..."
           Open3.popen3(*cmd) do |stdin, stdout, stderr, wait_thr|
             begin
+              stdin.write input  if input
               stdin.close
 
-              log_cmd = cmd.first.upcase  if log
-              stdout_r = Reader.new(stdout, output == :stdout, log == :stdout && log_cmd)
-              stderr_r = Reader.new(stderr, true, log == :stderr && log_cmd)
+              log_cmd = cmd.first.upcase
+              stdout_r = Reader.new(stdout, store: output == :stdout, log_with: log_cmd)
+              stderr_r = Reader.new(stderr, store: true, log_with: log_cmd, log_as: output == :stderr && Logger::DEBUG || Logger::INFO)
 
               Thread.timeout_or_live(limit, log: "while waiting for `#{cmd_str}`", timeout: timeout) do |time|
                 value = wait_thr.value
@@ -105,13 +106,13 @@ module Ffmprb
 
     class Reader < Thread
 
-      def initialize(input, store=false, log=nil)
+      def initialize(input, store: false, log_with: nil, log_as: Logger::DEBUG)
         @output = ''
         @queue = Queue.new
         super "reader" do
           begin
             while s = input.gets
-              Ffmprb.logger.debug "#{log}: #{s.chomp}"  if log
+              Ffmprb.logger.log log_as, "#{log_with}: #{s.chomp}"  if log_with
               @output << s  if store
             end
             @queue.enq @output

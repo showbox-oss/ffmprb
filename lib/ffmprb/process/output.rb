@@ -247,6 +247,8 @@ module Ffmprb
           if over_reel.duck
             fail Error, "Don't know how to duck video... yet"  if over_reel.duck != :audio
 
+            Ffmprb.logger.info "ATTENTION: ducking audio (due to the absence of a simple ffmpeg filter) does not support streaming main input. yet."
+
             # So ducking just audio here, ye?
             # XXX check if we're on audio channel
 
@@ -254,13 +256,13 @@ module Ffmprb
             fail Error, "Main output does not contain audio to duck"  unless main_av_o
 
             intermediate_extname = Process.intermediate_channel_extname video: main_av_o.channel?(:video), audio: main_av_o.channel?(:audio)
-            main_av_inter_o = File.temp_fifo(intermediate_extname)
+            main_av_inter_i, main_av_inter_o = File.threaded_buffered_fifo(intermediate_extname, reader_open_on_writer_idle_limit: Util::ThreadedIoBuffer.timeout * 2, proc_vis: process)
             @channel_lbl_ios.each do |channel_lbl, io|
-              @channel_lbl_ios[channel_lbl] = main_av_inter_o  if io == main_av_o  # XXX ~~~spaghetti
+              @channel_lbl_ios[channel_lbl] = main_av_inter_i  if io == main_av_o  # XXX ~~~spaghetti
             end
             process.proc_vis_edge process, main_av_o, :remove
-            process.proc_vis_edge process, main_av_inter_o
-            Ffmprb.logger.debug "Re-routed the main audio output (#{main_av_inter_o.path}->...->#{main_av_o.path}) through the process of audio ducking"
+            process.proc_vis_edge process, main_av_inter_i
+            Ffmprb.logger.debug "Re-routed the main audio output (#{main_av_inter_i.path}->...->#{main_av_o.path}) through the process of audio ducking"
 
             over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname(audio: true, video: false), proc_vis: process)
             lbl_over = "o#{idx}l#{i}"
