@@ -2,6 +2,8 @@ require 'open3'
 
 module Ffmprb
 
+  class Error < StandardError; end
+
   module Util
 
     class TimeLimitError < Error; end
@@ -16,7 +18,7 @@ module Ffmprb
       end
 
       def ffmpeg(*args, limit: nil, timeout: cmd_timeout, ignore_broken_pipes: true)
-        args = ['-loglevel', 'debug'] + args  if Ffmprb.debug
+        args = ['-loglevel', 'debug'] + args  if Ffmprb.ffmpeg_debug
         sh *ffmpeg_cmd, *args, output: :stderr, limit: limit, timeout: timeout, ignore_broken_pipes: ignore_broken_pipes
       end
 
@@ -41,7 +43,8 @@ module Ffmprb
                   if ignore_broken_pipes && value.signaled? && value.termsig == Signal.list['PIPE']
                     Ffmprb.logger.info "Ignoring broken pipe: #{cmd_str}"
                   else
-                    fail Error, "#{cmd_str} (#{status || "sig##{value.termsig}"}):\n#{stderr_r.read}"
+                    status ||= "sig##{value.termsig}"
+                    fail Error, "#{cmd_str} (#{status}):\n#{stderr_r.read}"
                   end
                 end
               end
@@ -136,5 +139,6 @@ module Ffmprb
 end
 
 # require 'ffmprb/util/synchro'
+require_relative 'util/proc_vis'
 require_relative 'util/thread'
 require_relative 'util/threaded_io_buffer'

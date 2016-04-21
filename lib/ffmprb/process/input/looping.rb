@@ -58,12 +58,13 @@ module Ffmprb
           # NOTE preprocessed and filtered fifo
           intermediate_extname = Process.intermediate_channel_extname video: src_io.channel?(:video), audio: src_io.channel?(:audio)
           dst_io = File.temp_fifo(intermediate_extname)
+          @raw.process.proc_vis_node dst_io
 
           Util::Thread.new "looping input processor" do
             # Ffmprb.logger.debug "Processing before looping"
 
             Ffmprb.logger.debug "(L3) Pre-processing into (#{dst_io.path})"
-            Ffmprb.process @_unfiltered do |unfiltered|  # TODO limit:
+            Ffmprb.process @_unfiltered, parent: @raw.process do |unfiltered|  # TODO limit:
 
               inp = input(cpy_io)
               output(dst_io, video: video, audio: audio) do
@@ -91,7 +92,7 @@ module Ffmprb
             Ffmprb.logger.debug "Looping #{buff_ios.size} times"
 
             Ffmprb.logger.debug "(L4) Looping (#{buff_ios.map &:path}) into (#{aux_io.path})"
-            Ffmprb.process do  # NOTE may not write its entire output, it's ok
+            Ffmprb.process parent: @raw.process do  # NOTE may not write its entire output, it's ok
 
               ins = buff_ios.map{ |i| input i }
               output(aux_io, video: nil, audio: nil) do

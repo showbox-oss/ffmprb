@@ -20,7 +20,7 @@ describe Ffmprb::File do
   context "simple buffered fifos" do
 
     around do |example|
-      Ffmprb::Util::Thread.new "test" do
+      Ffmprb::Util::Thread.new "test", main: true do
         @fifo = Ffmprb::File.threaded_buffered_fifo '.ext'
         example.run
         Ffmprb::Util::Thread.join_children!

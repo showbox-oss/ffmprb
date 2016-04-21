@@ -1,6 +1,7 @@
 module Ffmprb
 
   class Process
+    include Util::ProcVis::Node
 
     class << self
 
@@ -103,14 +104,18 @@ module Ffmprb
     end
 
     attr_accessor :timeout
+    attr_accessor :name
+    attr_reader :parent
     attr_accessor :ignore_broken_pipes
 
     def initialize(*args, **opts)
-      @inputs, @outputs = [], []
       self.timeout = opts.delete(:timeout) || Process.timeout
-
+      @name = opts.delete(:name)
+      @parent = opts.delete(:parent)
+      parent.proc_vis_node self  if parent
       self.ignore_broken_pipes = opts.delete(:ignore_broken_pipes)
       fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
+      @inputs, @outputs = [], []
     end
 
     def input(io, video: true, audio: true)
@@ -120,6 +125,7 @@ module Ffmprb
       ).tap do |inp|
         fail Error, "Too many inputs to the process, try breaking it down somehow"  if @inputs.size > Util.ffmpeg_inputs_max
         @inputs << inp
+        proc_vis_edge inp.io, self
       end
     end
 
@@ -133,6 +139,7 @@ module Ffmprb
         audio: channel_params(audio, Process.output_audio_options)
       ).tap do |outp|
         @outputs << outp
+        proc_vis_edge self, outp.io
         outp.instance_exec &blk  if blk
       end
     end
@@ -145,7 +152,8 @@ module Ffmprb
     def run(limit: nil)  # TODO (async: false)
       # NOTE this is both for the future async: option and according to
       # the threading policy (a parent death will be noticed and handled by children)
-      thr = Util::Thread.new do
+      thr = Util::Thread.new main: !parent do
+        proc_vis_node Thread.current
         # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
         # XXX just to return something -- no apparent practical use
         cmd = command
@@ -154,6 +162,7 @@ module Ffmprb
         Util.ffmpeg(*cmd, **opts).tap do |res|
           Util::Thread.join_children! limit, timeout: timeout
         end
+        proc_vis_node Thread.current, :remove
       end
       thr.value  if thr.join limit  # NOTE should not block for more than limit
     end
@@ -188,7 +197,6 @@ module Ffmprb
         {}
       end
     end
-
   end
 
 end

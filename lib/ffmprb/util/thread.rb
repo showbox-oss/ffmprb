@@ -2,8 +2,8 @@ module Ffmprb
 
   module Util
 
-    # NOTE doesn't have specs (and not too proud about it)
     class Thread < ::Thread
+      include ProcVis::Node
 
       class Error < Ffmprb::Error; end
       class ParentError < Error; end
@@ -41,7 +41,7 @@ module Ffmprb
 
       attr_reader :name
 
-      def initialize(name="some", &blk)
+      def initialize(name="some", main: false, &blk)
         @name = name
         @parent = Thread.current
         @live_children = []
@@ -50,7 +50,12 @@ module Ffmprb
         Ffmprb.logger.debug "about to launch #{name}"
         sync_q = Queue.new
         super() do
-          @parent.child_lives self  if @parent.respond_to? :child_lives
+          @parent.proc_vis_node self  if @parent.respond_to? :proc_vis_node
+          if @parent.respond_to? :child_lives
+            @parent.child_lives self
+          else
+            Ffmprb.logger.warn "Not the main: true thread run by a not #{self.class.name} thread"  unless main
+          end
           sync_q.enq :ok
           Ffmprb.logger.debug "#{name} thread launched"
           begin
@@ -65,6 +70,7 @@ module Ffmprb
             fail $!  # XXX I have no idea why I need to give it `$!` -- the docs say I need not
           ensure
             @parent.child_dies self  if @parent.respond_to? :child_dies
+            @parent.proc_vis_node self, :remove  if @parent.respond_to? :proc_vis_node
           end
         end
         sync_q.deq
@@ -81,6 +87,7 @@ module Ffmprb
           Ffmprb.logger.debug "picking up #{thr.name} thread"
           @live_children << thr
         end
+        proc_vis_edge self, thr
       end
 
       def child_dies(thr)
@@ -89,6 +96,7 @@ module Ffmprb
           @dead_children_q.enq thr
           fail "System Error"  unless @live_children.delete thr
         end
+        proc_vis_edge self, thr, :remove
       end
 
       def join_children!(limit=nil, timeout: Thread.timeout)

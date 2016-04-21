@@ -5,6 +5,7 @@ require 'tempfile'
 module Ffmprb
 
   class File  # NOTE I would rather rename it to Stream at the moment
+    include Util::ProcVis::Node
 
     class << self
 
@@ -100,6 +101,10 @@ module Ffmprb
       path!  # NOTE early (exception) raiser
     end
 
+    def label
+      basename
+    end
+
     def path
       path!
     end
@@ -108,6 +113,10 @@ module Ffmprb
 
     def exist?
       ::File.exist? path
+    end
+
+    def basename
+      @basename ||= ::File.basename(path)
     end
 
     def extname

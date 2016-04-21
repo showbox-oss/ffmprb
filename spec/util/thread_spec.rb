@@ -10,7 +10,7 @@ describe Ffmprb::Util::Thread do
         sleep 0.5
         q.enq "OK"
       end
-      thr = Ffmprb::Util::Thread.new do
+      thr = Ffmprb::Util::Thread.new main: true do
         Ffmprb::Util::Thread.timeout_or_live(1, timeout: 0.25) do
           q.deq
         end
@@ -26,7 +26,7 @@ describe Ffmprb::Util::Thread do
         sleep 1.5
         q.enq "OK"
       end
-      thr = Ffmprb::Util::Thread.new do
+      thr = Ffmprb::Util::Thread.new main: true do
         Ffmprb::Util::Thread.timeout_or_live(1, timeout: 0.25) do
           q.deq
         end
@@ -42,7 +42,7 @@ describe Ffmprb::Util::Thread do
         sleep 1.5
         q.enq "OK"
       end
-      thr = Ffmprb::Util::Thread.new do
+      thr = Ffmprb::Util::Thread.new main: true do
         Ffmprb::Util::Thread.timeout_or_live(timeout: 0.25) do |time|
           fail StamError  if time > 1
           q.deq
@@ -56,7 +56,7 @@ describe Ffmprb::Util::Thread do
     it "should fail a thread when its (any) parent dies (tragically)" do
       in_thr = nil
       thr = Thread.new do
-        in_thr = Ffmprb::Util::Thread.new "inner" do
+        in_thr = Ffmprb::Util::Thread.new "inner", main: true do
           Ffmprb::Util::Thread.timeout_or_live(timeout: 0.5) do
             sleep 1
           end
@@ -82,7 +82,7 @@ describe Ffmprb::Util::Thread do
         Ffmprb::Util::Thread.timeout = 0.5
 
         in_thr = nil
-        thr = Ffmprb::Util::Thread.new "main" do
+        thr = Ffmprb::Util::Thread.new "main", main: true do
           in_thr = Ffmprb::Util::Thread.new "sib1" do
             Ffmprb::Util::Thread.timeout_or_live(timeout: 0.5) do |time|
               sleep 1
