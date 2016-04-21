@@ -86,6 +86,43 @@ describe Ffmprb do
     end
 
 
+    it "should behave like README says it does" do
+      flick_mp4 = @av_file_btn_wtb_16.path
+      track_mp3 = @a_file_g_16.path
+      cine_flv = @av_out_stream.path
+
+      Ffmprb.process do
+
+        in_main = input(flick_mp4)
+        in_sound = input(track_mp3)
+        output cine_flv, video: {resolution: '1280x720'} do
+          roll in_main.crop(0.25).cut(from: 2, to: 5), transition: {blend: 1}
+          roll in_main.volume(2).cut(from: 6, to: 16), after: 2, transition: {blend: 1}
+          overlay in_sound.volume(0.8)
+        end
+
+      end
+
+      expect(@av_out_stream.length).to be_approximately 12
+
+    end
+
+    it "should fail on too much inputs" do
+      too_much = 99
+      expect {
+        Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
+
+          inps = (0..100).map{input file_input}
+          output file_output do
+            inps.each do |inp|
+              roll inp
+            end
+          end
+
+        end
+      }.to raise_error Ffmprb::Error
+    end
+
     it "should transcode" do
       Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
 
@@ -110,7 +147,7 @@ describe Ffmprb do
 
         Ffmprb.process(@av_out_file) do |file_output|
 
-          in1 = input(tmp_papng, default_fps: 25)
+          in1 = input(tmp_papng, video: {fps: 25})
           output(file_output, audio: false) do  # XXX
             roll in1
           end
@@ -158,7 +195,7 @@ describe Ffmprb do
           end
 
           expect do
-            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipe: to_not_to == :not_to) do |file_input|
+            Ffmprb.process(@av_file_e_bow_9, ignore_broken_pipes: to_not_to == :not_to) do |file_input|
 
               in1 = input(file_input)
               output(av_pipe, video: {resolution: Ffmprb::HD_1080p, fps: 60}) do
@@ -202,36 +239,43 @@ describe Ffmprb do
       expect(@av_out_file.length).to be_approximately 18
     end
 
-    # TODO doesn't work with non-streaming files...
     it "should loop" do
-      Ffmprb.process(@av_file_btn_wtb_16, @av_out_stream) do |file_input, file_output|
+      Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |default|
+        begin
+          Ffmprb::Util::ThreadedIoBuffer.block_size = 1024
 
-        in1 = input(file_input)
-        output(file_output) do
-          roll in1
+          Ffmprb.process(@av_file_btn_wtb_16, @av_out_stream) do |file_input, file_output|
+
+            in1 = input(file_input)
+            output(file_output) do
+              roll in1
+            end
+
+          end
+
+          expect(@av_out_stream.length).to be_approximately 16
+
+          Ffmprb.process(@av_out_stream, @av_out_file) do |file_input, file_output|
+
+            in1 = input(file_input)
+            output(file_output) do
+              roll in1.cut(to: 12).loop.cut(to: 47)
+            end
+
+          end
+
+          check_av_btn_wtb_at! 2
+          check_av_btn_wtb_at! 6, black: true
+          check_av_btn_wtb_at! 10
+          check_av_btn_wtb_at! 14
+          check_av_btn_wtb_at! 18, black: true
+          check_av_btn_wtb_at! 45
+
+          expect(@av_out_file.length).to be_approximately 47
+        ensure
+          Ffmprb::Util::ThreadedIoBuffer.block_size = default
         end
-
       end
-
-      expect(@av_out_stream.length).to be_approximately 16
-
-      Ffmprb.process(@av_out_stream, @av_out_file) do |file_input, file_output|
-
-        in1 = input(file_input)
-        output(file_output) do
-          roll in1.cut(to: 12).loop.cut(to: 47)
-        end
-
-      end
-
-      check_av_btn_wtb_at! 2
-      check_av_btn_wtb_at! 6, black: true
-      check_av_btn_wtb_at! 10
-      check_av_btn_wtb_at! 14
-      check_av_btn_wtb_at! 18, black: true
-      check_av_btn_wtb_at! 45
-
-      expect(@av_out_file.length).to be_approximately 47
     end
 
     it "should roll reels after specific time (cutting previous reels)" do
@@ -573,12 +617,6 @@ describe Ffmprb do
     end
 
     context :audio_overlay do
-      #
-      # around do |example|
-      #   Timeout.timeout(4) do
-      #     example.run
-      #   end
-      # end
 
       it "should overlay sound with volume" do
         Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_file) do |input1, input2, output1|
@@ -616,8 +654,7 @@ describe Ffmprb do
       end
 
       it "should duck the overlay sound wrt the main sound" do
-        # NOTE non-streaming output file requires additional development see #181845
-        Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_stream) do |input1, input2, output1|
+        Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_file) do |input1, input2, output1|
 
           in1 = input(input1)
           in2 = input(input2)
@@ -628,43 +665,67 @@ describe Ffmprb do
 
         end
 
-        @av_out_stream.sample at: 2 do |snap, sound|
+        @av_out_file.sample at: 2 do |snap, sound|
           check_white! pixel_data(snap, 100, 100)
           expect(wave_data(sound).frequency).to be_between(NOTES.G6, NOTES.B6)
         end
 
-        @av_out_stream.sample at: 6 do |snap, sound|
+        @av_out_file.sample at: 6 do |snap, sound|
           check_black! pixel_data(snap, 100, 100)
           expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
         end
 
-        expect(@av_out_stream.length).to be_approximately 16
+        expect(@av_out_file.length).to be_approximately 16
       end
 
       it "should duck some overlay sound wrt some main sound" do
-        Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |block_size|
+        Ffmprb::Util::ThreadedIoBuffer.block_size.tap do |default|
           begin
             Ffmprb::Util::ThreadedIoBuffer.block_size = 8*1024
 
-            # NOTE non-streaming output file requires additional development see #181845
-            Ffmprb.process(@a_file_g_16, @a_out_file) do |input1, output1|
+            Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_file) do |input1, input2, output1|
 
               in1 = input(input1)
+              in2 = input(input2)
               output(output1) do
-                roll in1.cut(from: 4, to: 12), transition: {blend: 1}
-                overlay in1, duck: :audio
+                lay in1.cut(to: 10), transition: {blend: 1}
+                overlay in2.cut(from: 4).loop, duck: :audio
               end
 
             end
 
-            expect(@a_out_file.length).to be_approximately(8)
-
-            [2, 6].each do |at|
-              check_note! :G6, wave_data(@a_out_file.sample_audio at: at)
+            @av_out_file.sample at: 2 do |snap, sound|
+              check_white! pixel_data(snap, 100, 100)
+              expect(wave_data(sound).frequency).to be_between(NOTES.G6, NOTES.B6)
             end
+
+            @av_out_file.sample at: 6 do |snap, sound|
+              check_black! pixel_data(snap, 100, 100)
+              expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
+            end
+
+            expect(@av_out_file.length).to be_approximately 10
           ensure
-            Ffmprb::Util::ThreadedIoBuffer.block_size = block_size
+            Ffmprb::Util::ThreadedIoBuffer.block_size = default
           end
+        end
+      end
+
+      it "should duck some overlay sound wrt some main sound" do
+        Ffmprb.process(@a_file_g_16, @a_out_file) do |input1, output1|
+
+          in1 = input(input1)
+          output(output1) do
+            roll in1.cut(from: 4, to: 12), transition: {blend: 1}
+            overlay in1, duck: :audio
+          end
+
+        end
+
+        expect(@a_out_file.length).to be_approximately(8)
+
+        [2, 6].each do |at|
+          check_note! :G6, wave_data(@a_out_file.sample_audio at: at)
         end
       end
 

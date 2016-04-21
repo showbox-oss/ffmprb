@@ -6,6 +6,7 @@ module Ffmprb
 
   Filter.silence_noise_max_db = -40
 
+  # NOTE ducking is currently not for streams
   Process.duck_audio_silent_min = 3
   Process.duck_audio_transition_length = 1
   Process.duck_audio_transition_in_start = -0.4
@@ -14,20 +15,27 @@ module Ffmprb
   Process.duck_audio_volume_lo = 0.1
   Process.timeout = 30
 
-  Process.input_options = {noautorotate: true}
+  Process.input_video_auto_rotate = false
+  Process.input_video_fps = nil  # NOTE the documented ffmpeg default is 25
 
   Process.output_video_resolution = CGA
   Process.output_video_fps = 16
   Process.output_audio_encoder = 'libmp3lame'
 
-  Util.ffmpeg_cmd = %w[ffmpeg -y]
-  Util.ffprobe_cmd = ['ffprobe']
   Util.cmd_timeout = 30
+  Util.ffmpeg_cmd = %w[ffmpeg -y]
+  Util.ffmpeg_inputs_max = 31
+  Util.ffprobe_cmd = ['ffprobe']
 
   Util::ThreadedIoBuffer.blocks_max = 1024
   Util::ThreadedIoBuffer.block_size = 64*1024
-  Util::ThreadedIoBuffer.timeout = 9
+  Util::ThreadedIoBuffer.timeout = 1
+  Util::ThreadedIoBuffer.timeout_limit = 15
+  # NOTE all this effectively sets the minimum throughput: blocks_max * blocks_size / timeout * timeout_limit
 
   Util::Thread.timeout = 15
+
+  self.debug = false
+  self.ffmpeg_debug = false
 
 end

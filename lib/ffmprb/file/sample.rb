@@ -18,7 +18,7 @@ module Ffmprb
       fail Error, "Can sample either video OR audio UNLESS a block is given"  unless block_given? || !!audio != !!video
 
       cmd = %W[-i #{path}]
-      cmd.concat %W[-deinterlace -an -ss #{at} -r 1 -vcodec mjpeg -f mjpeg #{video.path}]  if video
+      cmd.concat %W[-deinterlace -an -ss #{at} -vframes 1 #{video.path}]  if video
       cmd.concat %W[-vn -ss #{at} -t 1 #{audio.path}]  if audio
       Util.ffmpeg *cmd
 
@@ -28,11 +28,11 @@ module Ffmprb
         yield *[video || nil, audio || nil].compact
       ensure
         begin
-          video.remove  if video
-          audio.remove  if audio
+          video.unlink  if video
+          audio.unlink  if audio
           Ffmprb.logger.debug "Removed sample files"
         rescue
-          Ffmprb.logger.warn "Error removing sample files: #{$!.message}"
+          Ffmprb.logger.warn "#{$!.class.name} removing sample files: #{$!.message}"
         end
       end
     end

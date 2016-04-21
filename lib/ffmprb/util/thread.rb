@@ -58,9 +58,9 @@ module Ffmprb
               Ffmprb.logger.debug "#{name} thread done"
             end
           rescue Exception
-            Ffmprb.logger.warn "#{$!.class} raised in #{name} thread: #{$!.message}\nBacktrace:\n\t#{$!.backtrace.join("\n\t")}"
+            Ffmprb.logger.warn "#{$!.class.name} raised in #{name} thread: #{$!.message}\nBacktrace:\n\t#{$!.backtrace.join("\n\t")}"
             cause = $!
-            Ffmprb.logger.warn "...caused by #{cause.class}: #{cause.message}\nBacktrace:\n\t#{cause.backtrace.join("\n\t")}" while
+            Ffmprb.logger.warn "...caused by #{cause.class.name}: #{cause.message}\nBacktrace:\n\t#{cause.backtrace.join("\n\t")}" while
               cause = cause.cause
             fail $!  # XXX I have no idea why I need to give it `$!` -- the docs say I need not
           ensure
@@ -91,7 +91,7 @@ module Ffmprb
         end
       end
 
-      def join_children!(limit=nil, timeout: self.class.timeout)
+      def join_children!(limit=nil, timeout: Thread.timeout)
         timeout = [timeout, limit].compact.min
         Ffmprb.logger.debug "joining threads: #{@live_children.size} live, #{@dead_children_q.size} dead"
         until @live_children.empty? && @dead_children_q.empty?

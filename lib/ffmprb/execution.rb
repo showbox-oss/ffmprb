@@ -8,7 +8,7 @@ module Ffmprb
     end
 
     def run
-      Ffmprb.process *@params, &@script
+      Ffmprb.process *@params, ignore_broken_pipes: false, &@script
     end
 
   end

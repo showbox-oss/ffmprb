@@ -1,7 +1,3 @@
-# require 'ffmprb/util/synchro'
-require 'ffmprb/util/thread'
-require 'ffmprb/util/threaded_io_buffer'
-
 require 'open3'
 
 module Ffmprb
@@ -12,21 +8,21 @@ module Ffmprb
 
     class << self
 
-      attr_accessor :ffmpeg_cmd, :ffprobe_cmd
+      attr_accessor :ffmpeg_cmd, :ffmpeg_inputs_max, :ffprobe_cmd
       attr_accessor :cmd_timeout
 
       def ffprobe(*args, limit: nil, timeout: cmd_timeout)
         sh *ffprobe_cmd, *args, limit: limit, timeout: timeout
       end
 
-      def ffmpeg(*args, limit: nil, timeout: cmd_timeout, ignore_broken_pipe: false)
+      def ffmpeg(*args, limit: nil, timeout: cmd_timeout, ignore_broken_pipes: true)
         args = ['-loglevel', 'debug'] + args  if Ffmprb.debug
-        sh *ffmpeg_cmd, *args, output: :stderr, limit: limit, timeout: timeout, ignore_broken_pipe: ignore_broken_pipe
+        sh *ffmpeg_cmd, *args, output: :stderr, limit: limit, timeout: timeout, ignore_broken_pipes: ignore_broken_pipes
       end
 
-      def sh(*cmd, output: :stdout, log: :stderr, limit: nil, timeout: cmd_timeout, ignore_broken_pipe: false)
+      def sh(*cmd, output: :stdout, log: :stderr, limit: nil, timeout: cmd_timeout, ignore_broken_pipes: false)
         cmd = cmd.map &:to_s  unless cmd.size == 1
-        cmd_str = cmd.size != 1 ? cmd.map{|c| "\"#{c}\""}.join(' ') : cmd.first
+        cmd_str = cmd.size != 1 ? cmd.map{|c| sh_escape c}.join(' ') : cmd.first
         timeout = [timeout, limit].compact.min
         thr = Thread.new "`#{cmd_str}`" do
           Ffmprb.logger.info "Popening `#{cmd_str}`..."
@@ -42,8 +38,8 @@ module Ffmprb
                 value = wait_thr.value
                 status = value.exitstatus  # NOTE blocking
                 if status != 0
-                  if ignore_broken_pipe && value.signaled? && value.termsig == Signal.list['PIPE']
-                    Ffmprb.logger.debug "Ignoring broken pipe: #{cmd_str}"
+                  if ignore_broken_pipes && value.signaled? && value.termsig == Signal.list['PIPE']
+                    Ffmprb.logger.info "Ignoring broken pipe: #{cmd_str}"
                   else
                     fail Error, "#{cmd_str} (#{status || "sig##{value.termsig}"}):\n#{stderr_r.read}"
                   end
@@ -64,6 +60,15 @@ module Ffmprb
       end
 
       protected
+
+      # NOTE a best guess kinda method
+      def sh_escape(str)
+        if str !~ /^[a-z0-9\/.:_-]*$/i && str !~ /"/
+          "\"#{str}\""
+        else
+          str
+        end
+      end
 
       def process_dead!(wait_thr, cmd_str, limit)
         grace = limit ? limit/4 : 1
@@ -129,3 +134,7 @@ module Ffmprb
   end
 
 end
+
+# require 'ffmprb/util/synchro'
+require_relative 'util/thread'
+require_relative 'util/threaded_io_buffer'

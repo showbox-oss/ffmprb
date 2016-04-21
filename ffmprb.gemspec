@@ -19,13 +19,12 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   # NOTE I'm not happy with this dependency, and there's nothing crossplatform (= for windoze too) at the moment
-  spec.add_dependency 'mkfifo'
+  spec.add_dependency 'mkfifo', '~> 0.1.1'
 
-  spec.add_development_dependency 'bundler', '>= 1.9.9'
-  spec.add_development_dependency 'byebug', '>= 4.0.5'
-  spec.add_development_dependency 'guard-rspec', '>= 2.12.8'
-  spec.add_development_dependency 'rake', '>= 10.4.2'
-  spec.add_development_dependency 'rmagick', '>= 2.15'
-  spec.add_development_dependency 'rspec', '>= 3.2.0'
+  spec.add_development_dependency 'bundler', '>= 1.11.2'
+  spec.add_development_dependency 'byebug', '>= 8.2.2'
+  spec.add_development_dependency 'guard-rspec', '>= 4.6.5'
+  spec.add_development_dependency 'rake', '>= 11.1.2'
+  spec.add_development_dependency 'rmagick', '>= 2.15.4'
   spec.add_development_dependency 'ruby-sox', '>= 0.0.3'
 end

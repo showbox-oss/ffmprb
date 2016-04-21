@@ -4,19 +4,10 @@ module Ffmprb
 
     class Input
 
-      def temporise!(extname=nil)
-        extname ||= io.extname
-        self.io = nil
-        extend Temp
-        @extname = extname
-      end
-
-      module Temp
-
-        def io
-          @io ||= File.temp_fifo(@extname)
+      def temporise_io!(extname=nil)
+        @io.tap do
+          @io = File.temp_fifo(extname || io.extname)
         end
-
       end
 
     end

@@ -9,7 +9,8 @@ module Ffmprb
       attr_accessor :duck_audio_transition_length,
         :duck_audio_transition_in_start, :duck_audio_transition_out_start
 
-      attr_accessor :input_options
+      attr_accessor :input_video_auto_rotate
+      attr_accessor :input_video_fps
 
       attr_accessor :output_video_resolution
       attr_accessor :output_video_fps
@@ -17,22 +18,36 @@ module Ffmprb
 
       attr_accessor :timeout
 
-      def intermediate_channel_extname(*media)
-        if media == [:video]
-          '.y4m'
-        elsif media == [:audio]
-          '.wav'
-        elsif media.sort == [:audio, :video]
-          '.flv'
+      def intermediate_channel_extname(video:, audio:)
+        if video
+          if audio
+            '.flv'
+          else
+            '.y4m'
+          end
         else
-          fail Error, "I don't know how to channel [#{media.join ', '}]"
+          if audio
+            '.wav'
+          else
+            fail Error, "I don't know how to channel [#{media.join ', '}]"
+          end
         end
       end
 
+      def input_video_options
+        {
+          auto_rotate: input_video_auto_rotate,
+          fps: input_video_fps
+        }
+      end
+      def input_audio_options
+        {
+        }
+      end
       def output_video_options
         {
-          resolution: output_video_resolution,
-          fps: output_video_fps
+          fps: output_video_fps,
+          resolution: output_video_resolution
         }
       end
       def output_audio_options
@@ -88,25 +103,23 @@ module Ffmprb
     end
 
     attr_accessor :timeout
-    attr_accessor :ignore_broken_pipe
+    attr_accessor :ignore_broken_pipes
 
     def initialize(*args, **opts)
       @inputs, @outputs = [], []
-      self.timeout = opts.delete(:timeout) || self.class.timeout
+      self.timeout = opts.delete(:timeout) || Process.timeout
 
-      self.ignore_broken_pipe = opts.delete(:ignore_broken_pipe)
-      fail Error, "Unknown options: #{opts}"  unless opts.empty?
+      self.ignore_broken_pipes = opts.delete(:ignore_broken_pipes)
+      fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
     end
 
-    def input(io, **opts)
-      Input.new(io, self, **self.class.input_options.merge(opts)).tap do |inp|
+    def input(io, video: true, audio: true)
+      Input.new(io, self,
+        video: channel_params(video, Process.input_video_options),
+        audio: channel_params(audio, Process.input_audio_options)
+      ).tap do |inp|
+        fail Error, "Too many inputs to the process, try breaking it down somehow"  if @inputs.size > Util.ffmpeg_inputs_max
         @inputs << inp
-      end
-    end
-
-    def temp_input(extname)  # XXX SPEC ME
-      input(nil).tap do |inp|
-        inp.temporise! extname
       end
     end
 
@@ -116,11 +129,11 @@ module Ffmprb
 
     def output(io, video: true, audio: true, &blk)
       Output.new(io, self,
-        video: channel_params(video, self.class.output_video_options),
-        audio: channel_params(audio, self.class.output_audio_options)
-      ).tap do |out|
-        @outputs << out
-        out.instance_exec &blk  if blk
+        video: channel_params(video, Process.output_video_options),
+        audio: channel_params(audio, Process.output_audio_options)
+      ).tap do |outp|
+        @outputs << outp
+        outp.instance_exec &blk  if blk
       end
     end
 
@@ -136,7 +149,9 @@ module Ffmprb
         # NOTE yes, an exception can occur anytime, and we'll just die, it's ok, see above
         # XXX just to return something -- no apparent practical use
         cmd = command
-        Util.ffmpeg(*cmd, limit: limit, timeout: timeout, ignore_broken_pipe: @ignore_broken_pipe).tap do |res|
+        opts = {limit: limit, timeout: timeout}
+        opts[:ignore_broken_pipes] = ignore_broken_pipes  unless ignore_broken_pipes.nil?
+        Util.ffmpeg(*cmd, **opts).tap do |res|
           Util::Thread.join_children! limit, timeout: timeout
         end
       end
@@ -146,19 +161,24 @@ module Ffmprb
     private
 
     def command
-      input_options + filter_options + output_options
+      input_args + filter_args + output_args
     end
 
-    def input_options
-      @inputs.map(&:options).flatten(1)
+    def input_args
+      filter_args  # NOTE must run first
+      @input_args ||= @inputs.map(&:args).reduce(:+)
     end
 
-    def filter_options
-      Filter.complex_options @outputs.map(&:filters).reduce(:+)
+    # NOTE must run first
+    def filter_args
+      @filter_args ||= Filter.complex_args(
+        @outputs.map(&:filters).reduce(:+)
+      )
     end
 
-    def output_options
-      @outputs.map(&:options).flatten(1)
+    def output_args
+      filter_args  # NOTE must run first
+      @output_args ||= @outputs.map(&:args).reduce(:+)
     end
 
     def channel_params(value, default)

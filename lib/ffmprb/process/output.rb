@@ -8,18 +8,32 @@ module Ffmprb
 
         # XXX check for unknown options
 
-        def video_cmd_options(video=nil)
-          video = Process.output_video_options.merge(video.to_h || {})
-          [].tap do |options|
-            options.concat %W[-c:v #{video[:encoder]}]  if video[:encoder]
-            options.concat %W[-pix_fmt #{video[:pixel_format]}]  if video[:pixel_format]
+        def video_args(video=nil)
+          video = Process.output_video_options.merge(video.to_h)
+          [].tap do |args|
+            encoder = pixel_format = nil  # NOTE ah, ruby
+            args.concat %W[-c:v #{encoder}]  if (encoder = video.delete(:encoder))
+            args.concat %W[-pix_fmt #{pixel_format}]  if (pixel_format = video.delete(:pixel_format))
+            video.delete :resolution  # NOTE is handled otherwise
+            video.delete :fps  # NOTE is handled otherwise
+            fail "Unknown output video options: #{video}"  unless video.empty?
           end
         end
 
-        def audio_cmd_options(audio=nil)
-          audio = Process.output_audio_options.merge(audio.to_h || {})
-          [].tap do |options|
-            options.concat %W[-c:a #{audio[:encoder]}]  if audio[:encoder]
+        def audio_args(audio=nil)
+          audio = Process.output_audio_options.merge(audio.to_h)
+          [].tap do |args|
+            encoder = nil
+            args.concat %W[-c:a #{encoder}]  if (encoder = audio.delete(:encoder))
+            fail "Unknown output audio options: #{audio}"  unless audio.empty?
+          end
+        end
+
+        def resolve(io)
+          return io  unless io.is_a? String  # XXX XXX
+
+          File.create(io).tap do |file|
+            Ffmprb.logger.warn "Output file exists (#{file.path}), will probably overwrite"  if file.exist?
           end
         end
 
@@ -28,7 +42,7 @@ module Ffmprb
       attr_reader :process
 
       def initialize(io, process, video:, audio:)
-        @io = resolve(io)
+        @io = self.class.resolve(io)
         @process = process
         @channels = {
           video: video && @io.channel?(:video) && OpenStruct.new(video),
@@ -179,14 +193,18 @@ module Ffmprb
 
         segments.compact!
 
-        lbl_out = "o#{idx}o"
+        lbl_out = segments[0]
 
-        @filters.concat(
-          Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
-        )  if channel?(:video)
-        @filters.concat(
-          Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
-        )  if channel?(:audio)
+        if segments.size > 1
+          lbl_out = "o#{idx}o"
+
+          @filters.concat(
+            Filter.concat_v segments.map{|s| "#{s}:v"}, "#{lbl_out}:v"
+          )  if channel?(:video)
+          @filters.concat(
+            Filter.concat_a segments.map{|s| "#{s}:a"}, "#{lbl_out}:a"
+          )  if channel?(:audio)
+        end
 
         # Overlays
 
@@ -233,19 +251,15 @@ module Ffmprb
 
             main_av_o = @channel_lbl_ios["#{lbl_out}:a"]
             fail Error, "Main output does not contain audio to duck"  unless main_av_o
-            # XXX#181845 must really seperate channels for streaming (e.g. mp4 wouldn't stream through the fifo)
-            # NOTE what really must be done here (optimisation & compatibility):
-            # - output v&a through non-compressed pipes
-            # - v-output will be input to the new v+a merging+encoding process
-            # - a-output will go through the ducking process below and its output will be input to the m+e process above
-            # - v-output will have to use another thread-buffered pipe
-            main_av_inter_o = File.temp_fifo(main_av_o.extname)
+
+            intermediate_extname = Process.intermediate_channel_extname video: main_av_o.channel?(:video), audio: main_av_o.channel?(:audio)
+            main_av_inter_o = File.temp_fifo(intermediate_extname)
             @channel_lbl_ios.each do |channel_lbl, io|
               @channel_lbl_ios[channel_lbl] = main_av_inter_o  if io == main_av_o  # XXX ~~~spaghetti
             end
             Ffmprb.logger.debug "Re-routed the main audio output (#{main_av_inter_o.path}->...->#{main_av_o.path}) through the process of audio ducking"
 
-            over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname :audio)
+            over_a_i, over_a_o = File.threaded_buffered_fifo(Process.intermediate_channel_extname audio: true, video: false)
             lbl_over = "o#{idx}l#{i}"
             @filters.concat(
               over_reel.reel.filters_for lbl_over, video: false, audio: channel(:audio)
@@ -253,11 +267,11 @@ module Ffmprb
             @channel_lbl_ios["#{lbl_over}:a"] = over_a_i
             Ffmprb.logger.debug "Routed and buffering an auxiliary output fifos (#{over_a_i.path}>#{over_a_o.path}) for overlay"
 
-            inter_i, inter_o = File.threaded_buffered_fifo(main_av_inter_o.extname)
+            inter_i, inter_o = File.threaded_buffered_fifo(intermediate_extname)
             Ffmprb.logger.debug "Allocated fifos to buffer media (#{inter_i.path}>#{inter_o.path}) while finding silence"
 
-            ignore_broken_pipe_was = process.ignore_broken_pipe
-            process.ignore_broken_pipe = true  # NOTE audio ducking process may break the overlay pipe
+            ignore_broken_pipes_was = process.ignore_broken_pipes  # XXX maybe throw an exception instead?
+            process.ignore_broken_pipes = true  # NOTE audio ducking process may break the overlay pipe
 
             Util::Thread.new "audio ducking" do
               silence = Ffmprb.find_silence(main_av_inter_o, inter_i)
@@ -265,7 +279,7 @@ module Ffmprb
               Ffmprb.logger.debug "Audio ducking with silence: [#{silence.map{|s| "#{s.start_at}-#{s.end_at}"}.join ', '}]"
 
               Process.duck_audio inter_o, over_a_o, silence, main_av_o,
-                process_options: {ignore_broken_pipe: ignore_broken_pipe_was, timeout: process.timeout},
+                process_options: {ignore_broken_pipes: ignore_broken_pipes_was, timeout: process.timeout},
                 video: channel(:video), audio: channel(:audio)
             end
           end
@@ -275,25 +289,23 @@ module Ffmprb
         @filters
       end
 
-      def options
+      def args
         fail Error, "Must generate filters first."  unless @channel_lbl_ios
 
-        options = []
-
-        io_channel_lbls = {}  # XXX ~~~spaghetti
-        @channel_lbl_ios.each do |channel_lbl, io|
-          (io_channel_lbls[io] ||= []) << channel_lbl
-        end
-        io_channel_lbls.each do |io, channel_lbls|
-          channel_lbls.each do |channel_lbl|
-            options << '-map' << "[#{channel_lbl}]"
+        [].tap do |args|
+          io_channel_lbls = {}  # XXX ~~~spaghetti
+          @channel_lbl_ios.each do |channel_lbl, io|
+            (io_channel_lbls[io] ||= []) << channel_lbl
           end
-          options.concat self.class.video_cmd_options(channel :video)  if channel? :video
-          options.concat self.class.audio_cmd_options(channel :audio)  if channel? :audio
-          options << io.path
+          io_channel_lbls.each do |io, channel_lbls|
+            channel_lbls.each do |channel_lbl|
+              args.concat ['-map', "[#{channel_lbl}]"]
+            end
+            args.concat self.class.video_args(channel :video)  if channel? :video
+            args.concat self.class.audio_args(channel :audio)  if channel? :audio
+            args << io.path
+          end
         end
-
-        options
       end
 
       def roll(
@@ -328,21 +340,6 @@ module Ffmprb
 
       def channel?(medium)
         !!channel(medium)
-      end
-
-      protected
-
-      def resolve(io)
-        return io  unless io.is_a? String
-
-        case io
-        when /^\/\w/
-          File.create(io).tap do |file|
-            Ffmprb.logger.warn "Output file exists (#{file.path}), will probably overwrite"  if file.exist?
-          end
-        else
-          fail Error, "Cannot resolve output: #{io}"
-        end
       end
 
       private

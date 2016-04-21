@@ -72,18 +72,18 @@ module Ffmprb
       end
 
       def concat_v(inputs, output=nil)
-        inout "concat=%{inputs_count}:v=1:a=0", inputs, output,
-          inputs_count: (inputs.empty?? nil : inputs.size)
+        return copy(inputs, output)  if inputs.size == 1
+        inout "concat=#{inputs.size}:v=1:a=0", inputs, output
       end
 
       def concat_a(inputs, output=nil)
-        inout "concat=%{inputs_count}:v=0:a=1", inputs, output,
-          inputs_count: (inputs.empty?? nil : inputs.size)
+        return anull(inputs, output)  if inputs.size == 1
+        inout "concat=#{inputs.size}:v=0:a=1", inputs, output
       end
 
       def concat_av(inputs, output=nil)
-        inout "concat=%{inputs_count}:v=1:a=1", inputs, output,
-          inputs_count: (inputs.empty? || inputs.size % 2 != 0 ? nil : inputs.size/2)  # XXX meh
+        fail Error, "must be given an even number of inputs"  unless inputs.size.even?
+        inout "concat=#{inputs.size/2}:v=1:a=1", inputs, output
       end
 
       def copy(input=nil, output=nil)
@@ -261,7 +261,7 @@ module Ffmprb
         color_source '0xFFFFFF@1', duration, resolution, fps, output
       end
 
-      def complex_options(*filters)
+      def complex_args(*filters)
         ['-filter_complex', filters.join('; ')]  unless filters.empty?
       end
 
