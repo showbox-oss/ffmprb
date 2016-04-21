@@ -652,13 +652,13 @@ describe Ffmprb do
         ).to be_approximately NOTES.B6
       end
 
-      it "should duck the overlay sound wrt the main sound" do
+      it "should loop and duck the overlay sound wrt the main sound" do
         Ffmprb.process(@av_file_btn_wtb_16, @a_file_g_16, @av_out_file) do |input1, input2, output1|
 
           in1 = input(input1)
           in2 = input(input2)
-          output(output1) do
-            lay in1, transition: {blend: 1}
+          output(output1, video: {resolution: '800x600'}) do
+            lay in1.loop(2), transition: {blend: 1}
             overlay in2.loop, duck: :audio
           end
 
@@ -674,7 +674,8 @@ describe Ffmprb do
           expect(wave_data(sound).frequency).to be_within(10).of NOTES.G6
         end
 
-        expect(@av_out_file.length).to be_approximately 16
+        expect(@av_out_file.resolution).to eq '800x600'
+        expect(@av_out_file.length).to be_approximately 32
       end
 
       it "should duck some overlay sound wrt some main sound" do
