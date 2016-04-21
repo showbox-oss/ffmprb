@@ -87,15 +87,12 @@ module Ffmprb
 
           buff_ios = (1..times).map{File.temp_fifo intermediate_extname}
           Ffmprb.logger.debug "Preprocessed #{dst_io.path} will be teed to #{buff_ios.map(&:path).join '; '}"
-          looping = true
+          looping_max = times == Util.ffmpeg_inputs_max
           Util::Thread.new "cloning buffer watcher" do
             dst_io.threaded_buffered_copy_to *buff_ios
             Util::Thread.join_children!
 
-            if times == Util.ffmpeg_inputs_max
-              sleep 0.001  if looping  # NOTE Let's give it a chance
-              Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at #{Ffmprb::GEM_GITHUB_URL}/issues please)."  if looping
-            end
+            Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at #{Ffmprb::GEM_GITHUB_URL}/issues please)."  if looping_max
           end
 
           # Ffmprb.logger.debug "Concatenation of #{buff_ios.map(&:path).join '; '} will go to #{@io.io.path} to be fed to this process"
@@ -109,8 +106,8 @@ module Ffmprb
             Ffmprb.logger.debug "Looping #{buff_ios.size} times"
 
             Ffmprb.logger.debug "(L4) Looping (#{buff_ios.map &:path}) into (#{aux_io.path})"
-            begin
-              Ffmprb.process parent: @raw.process do  # NOTE may not write its entire output, it's ok
+            begin  # NOTE may not write its entire output, it's ok
+              Ffmprb.process parent: @raw.process, ignore_broken_pipes: false do
 
                 ins = buff_ios.map{ |i| input i }
                 output(aux_io, video: nil, audio: nil) do
@@ -118,8 +115,8 @@ module Ffmprb
                 end
 
               end
-            ensure
-              looping = false  # NOTE see the above warning
+            rescue Util::BrokenPipeError
+              looping_max = false  # NOTE see the above warning
             end
           end
 

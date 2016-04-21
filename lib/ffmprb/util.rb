@@ -6,6 +6,7 @@ module Ffmprb
 
   module Util
 
+    class BrokenPipeError < Error; end
     class TimeLimitError < Error; end
 
     class << self
@@ -41,8 +42,12 @@ module Ffmprb
                 value = wait_thr.value
                 status = value.exitstatus  # NOTE blocking
                 if status != 0
-                  if ignore_broken_pipes && value.signaled? && value.termsig == Signal.list['PIPE']
-                    Ffmprb.logger.info "Ignoring broken pipe: #{cmd_str}"
+                  if value.signaled? && value.termsig == Signal.list['PIPE']
+                    if ignore_broken_pipes
+                      Ffmprb.logger.info "Ignoring broken pipe: #{cmd_str}"
+                    else
+                      fail BrokenPipeError, cmd_str
+                    end
                   else
                     status ||= "sig##{value.termsig}"
                     fail Error, "#{cmd_str} (#{status}):\n#{stderr_r.read}"
