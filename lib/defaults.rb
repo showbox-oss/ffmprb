@@ -39,6 +39,7 @@ module Ffmprb
 
   # NOTE http://12factor.net etc
 
+  Ffmprb.log_level = Logger::INFO
   Ffmprb.ffmpeg_debug = ENV.fetch('FFMPRB_FFMPEG_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
   Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
 

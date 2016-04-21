@@ -8,4 +8,4 @@ end
 
 require 'ffmprb'
 
-Ffmprb.execute
+Ffmprb::Execution.start

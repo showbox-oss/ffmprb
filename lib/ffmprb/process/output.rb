@@ -315,6 +315,10 @@ module Ffmprb
         end
       end
 
+      def input(io, video: true, audio: true)
+        process.input io, video: video, audio: audio
+      end
+
       def roll(
         reel,
         onto: :full_screen,

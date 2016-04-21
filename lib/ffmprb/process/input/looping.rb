@@ -30,10 +30,6 @@ module Ffmprb
           # 2) Tee+buffer the original raw input io: one stream goes back into the process throw the raw input io replacement fifo; the other is fed into the filtering process
           # 3) Which uses the same underlying filters to produce a filtered and parameterised stream, which is fed into the looping process through a N-Tee+buffer
           # 4) Invoke the looping process which just concatenates its N inputs and produces the new raw input (the aux input)
-          # XXX
-          # -) If the consumer is broken of the:
-          #    a. raw input - the Tee+buffer is resilient - unless the f-p-l breaks too;
-          #    b. the f-p-l stream - the looping process fails, the N-Tee+buffer breaks, the filtering process fails, and the Tee+buffer may fail
 
           # Looping
           # NOTE all the processing is done before looping
@@ -96,7 +92,10 @@ module Ffmprb
             dst_io.threaded_buffered_copy_to *buff_ios
             Util::Thread.join_children!
 
-            Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at https://github.com/showbox-oss/ffmprb/issues please)."  if looping && times == Util.ffmpeg_inputs_max
+            if times == Util.ffmpeg_inputs_max
+              sleep 0.001  if looping  # NOTE Let's give it a chance
+              Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at #{Ffmprb::GEM_GITHUB_URL}/issues please)."  if looping
+            end
           end
 
           # Ffmprb.logger.debug "Concatenation of #{buff_ios.map(&:path).join '; '} will go to #{@io.io.path} to be fed to this process"

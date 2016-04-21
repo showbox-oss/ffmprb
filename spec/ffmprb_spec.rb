@@ -94,11 +94,10 @@ describe Ffmprb do
       Ffmprb.process do
 
         in_main = input(flick_mp4)
-        in_sound = input(track_mp3)
         output cine_flv, video: {resolution: '1280x720'} do
           roll in_main.crop(0.25).cut(from: 2, to: 5), transition: {blend: 1}
           roll in_main.volume(2).cut(from: 6, to: 16), after: 2, transition: {blend: 1}
-          overlay in_sound.volume(0.8)
+          overlay input(track_mp3).volume(0.8)
         end
 
       end
