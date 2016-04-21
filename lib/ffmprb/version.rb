@@ -1,5 +1,5 @@
 module Ffmprb
-  VERSION = '0.9.6'
+  VERSION = '0.10.0'
 
 
   FIREBASE_AVAILABLE =
