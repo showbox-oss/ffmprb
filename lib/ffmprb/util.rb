@@ -68,6 +68,9 @@ module Ffmprb
         thr.value
       end
 
+      def assert_options_empty!(opts)
+        fail ArgumentError, "Unknown options: #{opts}"  unless opts.empty?
+      end
       protected
 
       # NOTE a best guess kinda method

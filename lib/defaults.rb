@@ -21,6 +21,7 @@ module Ffmprb
   Process.output_video_resolution = CGA
   Process.output_video_fps = 16
   Process.output_audio_encoder = 'libmp3lame'
+  Process.output_audio_sampling_freq = nil  # NOTE Use ffmpeg default by default, specify otherwise e.g. 44100
 
   Util.cmd_timeout = 30
   Util.ffmpeg_cmd = %w[ffmpeg -y]

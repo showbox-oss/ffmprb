@@ -16,6 +16,7 @@ module Ffmprb
       attr_accessor :output_video_resolution
       attr_accessor :output_video_fps
       attr_accessor :output_audio_encoder
+      attr_accessor :output_audio_sampling_freq
 
       attr_accessor :timeout
 
@@ -53,7 +54,8 @@ module Ffmprb
       end
       def output_audio_options
         {
-          encoder: output_audio_encoder
+          encoder: output_audio_encoder,
+          sampling_freq: output_audio_sampling_freq
         }
       end
 
@@ -114,7 +116,7 @@ module Ffmprb
       @parent = opts.delete(:parent)
       parent.proc_vis_node self  if parent
       self.ignore_broken_pipes = opts.delete(:ignore_broken_pipes)
-      fail Error, "Unknown options: #{opts}"  unless opts.empty?  # XXX refactor into a separate error
+      Util.assert_options_empty! opts
       @inputs, @outputs = [], []
     end
 

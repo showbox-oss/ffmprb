@@ -146,7 +146,7 @@ lay input(episode).cut(to: 60), transition: {blend: 3}
 
 ### The defaults
 
-The defaults [defaults](https://github.com/showbox-oss/ffmprb/tree/master/lib/defaults.rb) are provided for every possible configuration option, you're welcome to config anything in your ffmprb scripts.
+The defaults [defaults](https://github.com/showbox-oss/ffmprb/tree/master/lib/defaults.rb) are provided for every possible configuration option (optional options' defaults for the methods below in particular), you're welcome to config anything in your ffmprb scripts.
 
 
 ### Advanced usage
@@ -178,9 +178,9 @@ end
 
 `input` returns a _reel_.
 
-`output`(_file_, [video: {false | {[resolution:], [fps:]}}], [audio: {false | {[encoder:]}}])
+`output`(_file_, [video: {false | {[resolution:], [fps:]}}], [audio: {false | {[encoder:], [sampling_freq:]}}])
 
-`output` also takes a block of `lay` and `overlay` commands:
+`output` also takes a block where you get to use `lay` and `overlay` methods:
 
 `lay`(_reel_[, after: _sec_[, transition: {blend: _sec_}])
 
@@ -190,7 +190,7 @@ end
 
 `overlay` is currently functional just for audio reels, sorry.
 
-### Available reel modifier (filter) commands
+### Available reel modifier (filter) methods
 
 `crop`({_ratio_ | {[top: _ratio_][, left: _ratio_][, bottom: _ratio_][, right: _ratio_][, width: _ratio_][, height: _ratio_]}})
 

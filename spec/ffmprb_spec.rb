@@ -122,6 +122,18 @@ describe Ffmprb do
       }.to raise_error Ffmprb::Error
     end
 
+    it "should fail on unknown options" do
+      expect {
+        Ffmprb.process(@av_file_c_gor_9, @av_out_file, magic: :yes_please!) do |file_input, file_output|
+
+          output file_output do
+            lay file_input
+          end
+
+        end
+      }.to raise_error ArgumentError
+    end
+
     it "should transcode" do
       Ffmprb.process(@av_file_c_gor_9, @av_out_file) do |file_input, file_output|
 

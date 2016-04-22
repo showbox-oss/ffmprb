@@ -22,14 +22,14 @@ module Ffmprb
             fps = nil  # NOTE ah, ruby
             args.concat %W[-noautorotate]  unless video.delete(:auto_rotate)
             args.concat %W[-r #{fps}]  if (fps = video.delete(:fps))
-            fail "Unknown input video options: #{video}"  unless video.empty?
+            Util.assert_options_empty! video
           end
         end
 
         def audio_args(audio=nil)
           audio = Process.input_audio_options.merge(audio.to_h)
           [].tap do |args|
-            fail "Unknown input audio options: #{audio}"  unless audio.empty?
+            Util.assert_options_empty! audio
           end
         end
 
