@@ -149,17 +149,30 @@ describe Ffmprb do
       expect(@av_out_file.length).to be_approximately 9
     end
 
-    it "should transcode video (no audio) with defaults" do
-      Ffmprb::File.temp_fifo '.apng' do |tmp_papng|
+    describe "video only (no audio)" do
 
-        Thread.new do
-          Ffmprb::Util.ffmpeg '-filter_complex', 'testsrc=d=2:r=25', tmp_papng.path
+      around do |example|
+        Ffmprb::File.temp_fifo '.apng' do |tmp_papng|
+
+          thr = Thread.new do
+            Ffmprb::Util.ffmpeg '-filter_complex', 'color=white:d=2:r=25', tmp_papng.path
+          end
+
+          @v_in_fifo = tmp_papng
+
+          begin
+            example.run
+          ensure
+            thr.join
+          end
         end
+      end
 
-        Ffmprb.process(@av_out_file) do |file_output|
+      it "should transcode with defaults (no audio track)" do
+        Ffmprb.process(@v_in_fifo, @av_out_file) do |fifo_input, file_output|
 
-          in1 = input(tmp_papng, video: {fps: 25})
-          output(file_output, audio: false) do  # XXX
+          in1 = input(fifo_input, video: {fps: 25})
+          output(file_output, audio: false) do
             roll in1
           end
 
@@ -167,7 +180,33 @@ describe Ffmprb do
 
         expect(@av_out_file.length).to be_approximately 2
 
+        @av_out_file.sample at: 0.5, audio: false do |image|
+          check_white! pixel_data(image, 250, 110)
+        end
+        expect {
+          @av_out_file.sample at: 0.5, video: false do |sound|
+            expect(false).to be_truthy
+          end
+        }.to raise_error Ffmprb::Error
       end
+
+      xit "should transcode with defaults (silence)" do
+        Ffmprb.process(@v_in_fifo, @av_out_file) do |fifo_input, file_output|
+
+          in1 = input(fifo_input, video: {fps: 25})
+          output(file_output) do
+            roll in1
+          end
+
+        end
+
+        expect(@av_out_file.length).to be_approximately 2
+        @av_out_file.sample at: 0.5 do |image, sound|
+          check_white! pixel_data(image, 250, 110)
+          expect(wave_data(sound).volume).to eq MIN_VOLUME
+        end
+      end
+
     end
 
     it "should partially support multiple outputs" do

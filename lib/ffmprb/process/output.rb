@@ -84,6 +84,7 @@ module Ffmprb
             # NOTE Image-Padding to match the target resolution
             # TODO full screen only at the moment (see exception above)
 
+            Ffmprb.logger.debug "#{self} asking for filters of #{curr_reel.reel.io.inspect} video: #{channel(:video)}, audio: #{channel(:audio)}"
             @filters.concat(
               curr_reel.reel.filters_for lbl, video: channel(:video), audio: channel(:audio)
             )

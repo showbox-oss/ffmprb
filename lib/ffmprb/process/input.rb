@@ -74,8 +74,14 @@ module Ffmprb
               else
                 Filter.copy "#{in_lbl}:v", "#{lbl}:v"
               end
+            elsif video
+              fail Error, "No video stream to provide"
             end),
-          *(audio && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
+          *(if audio && channel?(:audio)
+              Filter.anull "#{in_lbl}:a", "#{lbl}:a"
+            elsif audio
+              fail Error, "No audio stream to provide"
+            end)
         ]
       end
 

@@ -23,7 +23,7 @@ module Ffmprb
       def intermediate_channel_extname(video:, audio:)
         if video
           if audio
-            '.flv'
+            '.flv'  # TODO optimise this by using http://superuser.com/a/522853 or something
           else
             '.y4m'
           end

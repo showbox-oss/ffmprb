@@ -144,6 +144,7 @@ module Ffmprb
                         output_enq! nil  # NOTE EOF signal
                       end
                     else
+                      Thread.current.live!
                       timeouts += 1
                       if !@terminate && timeouts > 2 * logged_timeouts
                         Ffmprb.logger.debug "ThreadedIoBuffer reader (from #{input_io.path}) retrying... (#{timeouts} reads): #{$!.class}"
@@ -216,6 +217,7 @@ module Ffmprb
                 end
 
               rescue IO::WaitWritable
+                Thread.current.live!
                 timeouts += 1
                 if timeouts > 2 * logged_timeouts
                   Ffmprb.logger.debug "ThreadedIoBuffer writer (to #{output_io.path}) retrying... (#{timeouts} writes): #{$!.class}"

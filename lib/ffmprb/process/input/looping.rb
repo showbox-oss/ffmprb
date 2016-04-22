@@ -35,7 +35,7 @@ module Ffmprb
           # NOTE all the processing is done before looping
 
           aux_input(video: video, audio: audio).filters_for lbl,
-            video: OpenStruct.new, audio: OpenStruct.new
+            video: video && OpenStruct.new, audio: audio && OpenStruct.new
         end
 
         protected
