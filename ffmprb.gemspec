@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.email         = ['costa@mouldwarp.com']
 
   spec.summary       = "ffmprb is your audio/video montage friend, based on https://ffmpeg.org"
-  spec.description   = "A DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends"
+  spec.description   = "A video and audio composing DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends"
   spec.homepage      = Ffmprb::GEM_GITHUB_URL
 
   spec.files         = `git ls-files -z`.split("\x0").reject { |f| f.match(%r{^(test|spec|features)/}) }

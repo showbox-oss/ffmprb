@@ -3,7 +3,7 @@
 [![Circle CI](https://circleci.com/gh/showbox-oss/ffmprb.svg?style=svg)](https://circleci.com/gh/showbox-oss/ffmprb)
 ## your audio/video montage pal, based on [ffmpeg](https://ffmpeg.org)
 
-A command-line utility, a DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends.
+A video and audio composing DSL (Damn-Simple Language) and a micro-engine for ffmpeg and ffriends (with CLI)
 
 If you're neither a video technologist, nor a video artist, you neither need cumbersome low level tools (like ffmpeg), nor heavy and costly high level tools (like Premiere).
 
