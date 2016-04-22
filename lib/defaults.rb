@@ -21,6 +21,7 @@ module Ffmprb
   Process.output_video_resolution = CGA
   Process.output_video_fps = 16
   Process.output_audio_encoder = 'libmp3lame'
+  Process.output_audio_sampling_freq = nil  # NOTE Use ffmpeg default by default, specify otherwise e.g. 44100
 
   Util.cmd_timeout = 30
   Util.ffmpeg_cmd = %w[ffmpeg -y]
@@ -39,6 +40,7 @@ module Ffmprb
 
   # NOTE http://12factor.net etc
 
+  Ffmprb.log_level = Logger::INFO
   Ffmprb.ffmpeg_debug = ENV.fetch('FFMPRB_FFMPEG_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
   Ffmprb.debug = ENV.fetch('FFMPRB_DEBUG', '') !~ Ffmprb::ENV_VAR_FALSE_REGEX
 

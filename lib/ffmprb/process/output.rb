@@ -16,7 +16,7 @@ module Ffmprb
             args.concat %W[-pix_fmt #{pixel_format}]  if (pixel_format = video.delete(:pixel_format))
             video.delete :resolution  # NOTE is handled otherwise
             video.delete :fps  # NOTE is handled otherwise
-            fail "Unknown output video options: #{video}"  unless video.empty?
+            Util.assert_options_empty! video
           end
         end
 
@@ -25,7 +25,8 @@ module Ffmprb
           [].tap do |args|
             encoder = nil
             args.concat %W[-c:a #{encoder}]  if (encoder = audio.delete(:encoder))
-            fail "Unknown output audio options: #{audio}"  unless audio.empty?
+            args.concat %W[-ar #{sampling_freq}]  if (sampling_freq = audio.delete(:sampling_freq))
+            Util.assert_options_empty! audio
           end
         end
 
@@ -83,6 +84,7 @@ module Ffmprb
             # NOTE Image-Padding to match the target resolution
             # TODO full screen only at the moment (see exception above)
 
+            Ffmprb.logger.debug "#{self} asking for filters of #{curr_reel.reel.io.inspect} video: #{channel(:video)}, audio: #{channel(:audio)}"
             @filters.concat(
               curr_reel.reel.filters_for lbl, video: channel(:video), audio: channel(:audio)
             )
@@ -313,6 +315,10 @@ module Ffmprb
             args << io.path
           end
         end
+      end
+
+      def input(io, video: true, audio: true)
+        process.input io, video: video, audio: audio
       end
 
       def roll(

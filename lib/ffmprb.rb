@@ -35,11 +35,11 @@ module Ffmprb
     end
     alias :action! :process  # ;)
 
-    attr_accessor :debug, :ffmpeg_debug
+    attr_accessor :debug, :ffmpeg_debug, :log_level
 
     def logger
       @logger ||= Logger.new(STDERR).tap do |logger|
-        logger.level = debug ? Logger::DEBUG : Logger::INFO  # XXX thorify for -v -vv and -q
+        logger.level = debug ? Logger::DEBUG : Ffmprb.log_level
       end
     end
 

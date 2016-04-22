@@ -22,14 +22,14 @@ module Ffmprb
             fps = nil  # NOTE ah, ruby
             args.concat %W[-noautorotate]  unless video.delete(:auto_rotate)
             args.concat %W[-r #{fps}]  if (fps = video.delete(:fps))
-            fail "Unknown input video options: #{video}"  unless video.empty?
+            Util.assert_options_empty! video
           end
         end
 
         def audio_args(audio=nil)
           audio = Process.input_audio_options.merge(audio.to_h)
           [].tap do |args|
-            fail "Unknown input audio options: #{audio}"  unless audio.empty?
+            Util.assert_options_empty! audio
           end
         end
 
@@ -74,8 +74,14 @@ module Ffmprb
               else
                 Filter.copy "#{in_lbl}:v", "#{lbl}:v"
               end
+            elsif video
+              fail Error, "No video stream to provide"
             end),
-          *(audio && channel?(:audio)? Filter.anull("#{in_lbl}:a", "#{lbl}:a"): nil)
+          *(if audio && channel?(:audio)
+              Filter.anull "#{in_lbl}:a", "#{lbl}:a"
+            elsif audio
+              fail Error, "No audio stream to provide"
+            end)
         ]
       end
 

@@ -1,6 +1,8 @@
 module Ffmprb
+
   VERSION = '0.10.1'
 
+  GEM_GITHUB_URL = 'https://github.com/showbox-oss/ffmprb'
 
   FIREBASE_AVAILABLE =
     begin
@@ -8,4 +10,5 @@ module Ffmprb
       true
     rescue Exception
     end
+
 end

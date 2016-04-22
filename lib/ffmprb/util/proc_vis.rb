@@ -115,6 +115,7 @@ module Ffmprb
             prev_t = Time.now
             while @_proc_vis_upq.deq  # NOTE currently, runs forever (nil terminator needed)
               proc_vis_do_update
+              Thread.current.live!  # XXX not the best we can do here
               while Time.now - prev_t < UPDATE_PERIOD_SEC
                 @_proc_vis_upq.deq  # NOTE drains the queue
               end

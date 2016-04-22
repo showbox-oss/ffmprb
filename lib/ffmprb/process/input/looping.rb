@@ -30,16 +30,12 @@ module Ffmprb
           # 2) Tee+buffer the original raw input io: one stream goes back into the process throw the raw input io replacement fifo; the other is fed into the filtering process
           # 3) Which uses the same underlying filters to produce a filtered and parameterised stream, which is fed into the looping process through a N-Tee+buffer
           # 4) Invoke the looping process which just concatenates its N inputs and produces the new raw input (the aux input)
-          # XXX
-          # -) If the consumer is broken of the:
-          #    a. raw input - the Tee+buffer is resilient - unless the f-p-l breaks too;
-          #    b. the f-p-l stream - the looping process fails, the N-Tee+buffer breaks, the filtering process fails, and the Tee+buffer may fail
 
           # Looping
           # NOTE all the processing is done before looping
 
           aux_input(video: video, audio: audio).filters_for lbl,
-            video: OpenStruct.new, audio: OpenStruct.new
+            video: video && OpenStruct.new, audio: audio && OpenStruct.new
         end
 
         protected
@@ -91,12 +87,12 @@ module Ffmprb
 
           buff_ios = (1..times).map{File.temp_fifo intermediate_extname}
           Ffmprb.logger.debug "Preprocessed #{dst_io.path} will be teed to #{buff_ios.map(&:path).join '; '}"
-          looping = true
+          looping_max = times == Util.ffmpeg_inputs_max
           Util::Thread.new "cloning buffer watcher" do
             dst_io.threaded_buffered_copy_to *buff_ios
             Util::Thread.join_children!
 
-            Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at https://github.com/showbox-oss/ffmprb/issues please)."  if looping && times == Util.ffmpeg_inputs_max
+            Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at #{Ffmprb::GEM_GITHUB_URL}/issues please)."  if looping_max
           end
 
           # Ffmprb.logger.debug "Concatenation of #{buff_ios.map(&:path).join '; '} will go to #{@io.io.path} to be fed to this process"
@@ -110,8 +106,8 @@ module Ffmprb
             Ffmprb.logger.debug "Looping #{buff_ios.size} times"
 
             Ffmprb.logger.debug "(L4) Looping (#{buff_ios.map &:path}) into (#{aux_io.path})"
-            begin
-              Ffmprb.process parent: @raw.process do  # NOTE may not write its entire output, it's ok
+            begin  # NOTE may not write its entire output, it's ok
+              Ffmprb.process parent: @raw.process, ignore_broken_pipes: false do
 
                 ins = buff_ios.map{ |i| input i }
                 output(aux_io, video: nil, audio: nil) do
@@ -119,8 +115,8 @@ module Ffmprb
                 end
 
               end
-            ensure
-              looping = false  # NOTE see the above warning
+            rescue Util::BrokenPipeError
+              looping_max = false  # NOTE see the above warning
             end
           end
 
