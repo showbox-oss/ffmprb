@@ -20,7 +20,7 @@ describe Ffmprb::Execution do
 
       cmd = "exe/ffmprb < #{tf.path}"
 
-      expect(Ffmprb::Util.sh cmd).to match /WARN.+Output file exists/  # NOTE temp files are _created_ above
+      expect(Ffmprb::Util.sh cmd, output: :stderr).to match /WARN.+Output file exists/  # NOTE temp files are _created_ above
       expect(@av_file_o.length).to be_approximately @av_file_c_gor_9.length
     end
   end
@@ -41,26 +41,23 @@ describe Ffmprb::Execution do
 
       cmd = "exe/ffmprb #{@av_file_c_gor_9.path} #{@a_file_g_16.path} #{@av_file_o.path} < #{tf.path}"
 
-      expect(Ffmprb::Util.sh cmd).to match /WARN.+Output file exists/  # NOTE temp files are _created_ above
+      expect(Ffmprb::Util.sh cmd, output: :stderr).to match /WARN.+Output file exists/  # NOTE temp files are _created_ above
       expect(@av_file_o.length).to be_approximately @av_file_c_gor_9.length
     end
   end
 
-  it "should warn about the looping limitation" do
+  [['', 300, :to], [' not', 90, :not_to]].each do |wat, cut, to_not_to|
+    it "should#{wat} warn about the looping limitation" do
 
-    [[270, :to], [90, :not_to]].each do |cut, to_not_to|
-      outp_s = Ffmprb::Util.sh(
-        "exe/ffmprb #{@av_file_c_gor_9.path} #{@av_file_o.path}", input: <<-FFMPRB
-          |av_main_i, av_main_o|
+      inp_s = <<-FFMPRB
 
-          in1 = input(av_main_i)
-          output(av_main_o) do
-            roll in1.loop.cut(to: #{cut})
-          end
+        in1 = input('#{@av_file_c_gor_9.path}')
+        output('#{@av_file_o.path}') do
+          roll in1.loop.cut(to: #{cut})
+        end
 
-        FFMPRB
-      )
-      expect(outp_s).send to_not_to, match(/WARN.+Looping.+finished before its consumer/)
+      FFMPRB
+      expect(Ffmprb::Util.sh 'exe/ffmprb', input: inp_s, output: :stderr).send to_not_to, match(/WARN.+Looping.+finished before its consumer/)
       expect(@av_file_o.length true).to be_approximately cut
     end
   end
