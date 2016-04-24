@@ -87,12 +87,11 @@ module Ffmprb
 
           buff_ios = (1..times).map{File.temp_fifo intermediate_extname}
           Ffmprb.logger.debug "Preprocessed #{dst_io.path} will be teed to #{buff_ios.map(&:path).join '; '}"
-          looping_max = times == Util.ffmpeg_inputs_max
           Util::Thread.new "cloning buffer watcher" do
-            dst_io.threaded_buffered_copy_to *buff_ios
-            Util::Thread.join_children!
-
-            Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at #{Ffmprb::GEM_GITHUB_URL}/issues please)."  if looping_max
+            dst_io.threaded_buffered_copy_to(*buff_ios).tap do |io_buff|
+              Util::Thread.join_children!
+              Ffmprb.logger.warn "Looping  ~from #{src_io.path} finished before its consumer: if you just wanted to loop input #{Util.ffmpeg_inputs_max} times, that's fine, but if you expected it to loop indefinitely... #{Util.ffmpeg_inputs_max} is the maximum #loop can do at the moment, and it may just not be enough in this case (workaround by concatting or file a complaint at #{Ffmprb::GEM_GITHUB_URL}/issues please)."  if times == Util.ffmpeg_inputs_max && io_buff.stats.blocks_buff == 0
+            end
           end
 
           # Ffmprb.logger.debug "Concatenation of #{buff_ios.map(&:path).join '; '} will go to #{@io.io.path} to be fed to this process"
