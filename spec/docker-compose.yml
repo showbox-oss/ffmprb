@@ -1,0 +1,8 @@
+version: '2.1'
+services:
+  tester:
+    build: ..
+    volumes:
+      - ..:/ffmprb
+    working_dir: /ffmprb
+    command: rspec
