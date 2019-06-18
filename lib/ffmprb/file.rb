@@ -74,7 +74,7 @@ module Ffmprb
       end
 
       def temp_fifo_path(extname)
-        ::File.join Dir.tmpdir, Dir::Tmpname.make_tmpname('', 'p' + extname)
+        ::File.join Dir.tmpdir, "#{rand(2**222)}p#{extname}"
       end
 
       def image?(extname)
